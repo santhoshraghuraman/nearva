@@ -8,3 +8,7 @@ aiofiles
 bcrypt
 itsdangerous
 cloudinary
+python-socketio
+fastapi-socketio
+python-jose
+passlib

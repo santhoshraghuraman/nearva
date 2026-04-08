@@ -1,0 +1,42 @@
+﻿node.exe : Vercel CLI 50.1.3
+At C:\Users\91959\AppData\Roaming\npm\vercel.ps1:24 char:5
++     & "node$exe"  
+"$basedir/node_modules/vercel/dist/vc.js" $args
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Vercel CLI 5 
+   0.1.3:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Retrieving projectΓÇª
+Deploying sas-projects-66d0d0fb/nearva
+Uploading [--------------------] (0.0B/92.7KB)
+Uploading [=====---------------] (27.6KB/92.7KB)
+Uploading [=============-------] (60.5KB/92.7KB)
+Uploading [================----] (76.5KB/92.7KB)
+Uploading [====================] (92.7KB/92.7KB)
+Inspect: https://vercel.com/sas-projects-66d0d0fb/nearva/3
+NqaUDgMqJWKPJnWo1g912tVH1nM [4s]
+Production: 
+https://nearva-7kjzcskfa-sas-projects-66d0d0fb.vercel.app 
+[4s]
+Building...
+Building...
+Building: Running build in Washington, D.C., USA (East) 
+ΓÇô iad1
+Building: Build machine configuration: 2 cores, 8 GB
+Building: Retrieving list of deployment files...
+Building: Previous build caches not available.
+Building: Downloading 49 deployment files...
+Building: Running "vercel build"
+Building: Vercel CLI 50.38.2
+Building: No Python version specified in .python-version, 
+pyproject.toml, or Pipfile.lock. Using python version: 
+3.12
+Building: Creating virtual environment at 
+"/vercel/path0/.vercel/python/.venv"...
+Building: Using uv 0.10.11
+Building: Installing required dependencies from 
+requirements.txt...
+Building: Build Completed in /vercel/output [5s]
+Building: Deploying outputs...

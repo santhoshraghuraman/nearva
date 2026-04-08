@@ -2,6 +2,36 @@
 
 {% block title %}Nearva - Hyperlocal Services{% endblock %}
 
+{% block header %}
+<nav id="main-nav" class="fixed top-6 inset-x-0 mx-auto w-[92%] max-w-[1200px] z-[100] fade-in-up transition-all duration-300">
+    <div class="bg-white rounded-[28px] border border-white/20 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.12)] flex items-center justify-between px-6 md:px-10 h-[72px] md:h-[84px]">
+        
+        <!-- Logo (Left) -->
+        <a href="/" class="flex items-center group transition-transform hover:scale-105 active:scale-95">
+            <img src="{{ url_for('static', path='images/nearva_logo.png') }}?v=11.0" 
+                 class="h-8 md:h-[38px] w-auto object-contain mix-blend-multiply" 
+                 alt="Nearva Logo" loading="eager">
+        </a>
+
+        <!-- Right Side: Controls -->
+        <div class="flex items-center gap-6 md:gap-10">
+            <!-- Language Toggle -->
+            <button onclick="toggleLanguage()" class="text-[12px] md:text-sm font-black text-slate-500 hover:text-blue-600 transition-colors uppercase tracking-[0.15em] px-2 py-1">
+                <span id="lang-display">EN | தமிழ்</span>
+            </button>
+
+            <!-- Profile Entry -->
+            <a href="{% if request.session.user_id %}/user/dashboard{% elif request.session.worker_id %}/worker/dashboard{% else %}/user/login{% endif %}" 
+               class="flex items-center justify-center w-10 h-10 md:w-12 md:h-12 bg-slate-50 border border-slate-100 rounded-full text-slate-600 hover:text-blue-600 hover:bg-blue-50 transition-all active:scale-90 shadow-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 md:h-6 md:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+            </a>
+        </div>
+    </div>
+</nav>
+{% endblock %}
+
 {% block head %}
 <style>
     .hero-bg {
@@ -51,7 +81,7 @@
 
 {% block content %}
 <!-- Hero Section -->
-<div class="relative min-h-screen flex items-start sm:items-center justify-center hero-bg overflow-hidden pt-20">
+<div class="relative min-h-screen flex items-start sm:items-center justify-center hero-bg overflow-hidden pt-12">
     <!-- Video Background -->
     <video autoplay muted loop playsinline poster="{{ url_for('static', path='images/hero_bg.jpg') }}" preload="auto"
         class="hero-video" id="hero-video-bg">
@@ -65,56 +95,57 @@
     <div class="absolute inset-0 hero-overlay"></div>
 
     <div
-        class="relative z-10 container max-w-[1100px] mx-auto px-6 pt-32 pb-20 md:py-20 text-center flex flex-col items-center">
+        class="relative z-10 container max-w-[1100px] mx-auto px-5 pt-20 pb-20 md:py-20 text-center flex flex-col items-center">
 
-        <p class="fade-in-up text-sm md:text-base text-blue-400 font-bold uppercase tracking-[0.2em] mb-6">
-            <span data-en="Trusted workers in your area within seconds."
-                data-ta="உங்கள் பகுதியில் உள்ள நம்பிக்கையான பணியாளர்கள்.">Trusted workers in your area within
-                seconds.</span>
+        <p class="fade-in-up text-[11px] md:text-base text-[#3b82f6] font-extrabold uppercase tracking-[0.25em] mb-6 mx-auto leading-relaxed text-center" 
+           data-en="Trusted workers in your area <br> within seconds." 
+           data-ta="உங்கள் பகுதியில் நம்பகமான ஊழியர்கள் <br> சில நொடிகளில்.">
+            Trusted workers in your area <br> within seconds.
         </p>
 
         <h1
-            class="fade-in-up animate-delay-1 text-5xl sm:text-6xl md:text-8xl font-black text-white tracking-tight mb-8 leading-[1.05] hero-content-shadow">
+            class="fade-in-up animate-delay-1 text-[42px] sm:text-6xl md:text-8xl font-black text-white tracking-tight mb-8 leading-[1.05] hero-content-shadow">
             <span data-en="Help is" data-ta="உதவி">Help is</span>
-            <span class="text-[#3b82f6] relative inline-block">
+            <span class="text-[#3b82f6]">
                 <span data-en="closer" data-ta="அருகிலேயே">closer</span>
             </span>
-            <br class="hidden md:block" />
+            <br class="md:block" />
             <span data-en="than you think." data-ta="இருக்கிறது.">than you think.</span>
         </h1>
 
         <p
-            class="fade-in-up animate-delay-2 hero-sub text-lg md:text-xl text-gray-200 mb-10 max-w-2xl mx-auto leading-relaxed font-medium hero-content-shadow">
+            class="fade-in-up animate-delay-2 hero-sub text-[16px] md:text-xl text-gray-100/90 mb-12 max-w-[320px] sm:max-w-2xl mx-auto leading-relaxed font-medium hero-content-shadow">
             <span data-en="Find trusted local workers instantly. No middlemen, just direct connection."
                 data-ta="உடனடியாக பணியாளர்களைக் கண்டறியவும். <br class='hidden md:block' /> நேரடித் தொடர்பு, இடைத்தரகர்கள் இல்லை.">Find
-                trusted local workers instantly. <br class="hidden md:block" /> No middlemen, just direct
+                trusted local workers instantly.<br class="hidden md:block" /> No middlemen, just direct
                 connection.</span>
         </p>
 
         <div
-            class="fade-in-up animate-delay-2 flex flex-col sm:flex-row gap-4 justify-center w-full max-w-[340px] sm:max-w-2xl mx-auto px-4">
+            class="fade-in-up animate-delay-2 flex flex-col sm:flex-row gap-4 justify-center w-full max-w-[320px] sm:max-w-2xl mx-auto">
             <a href="/map"
-                class="gpu-accelerated group inline-flex items-center justify-center px-8 py-5 text-base sm:text-lg font-bold rounded-2xl text-white bg-[#2563eb] hover:bg-[#1d4ed8] shadow-xl shadow-blue-600/20 active:scale-95 transition-all duration-300 w-full sm:w-auto whitespace-nowrap">
+                class="gpu-accelerated group inline-flex items-center justify-center px-8 py-5 h-[62px] text-base font-bold rounded-2xl text-white bg-[#2563eb] hover:bg-[#1d4ed8] shadow-xl shadow-blue-600/30 active:scale-95 transition-all duration-300 w-full sm:w-auto whitespace-nowrap">
                 <span data-en="Find Nearby Workers" data-ta="பணியாளர்களைத் தேடுங்கள்">Find Nearby Workers</span>
                 <svg xmlns="http://www.w3.org/2000/svg"
-                    class="h-5 w-5 sm:h-6 sm:w-6 ml-2 md:ml-3 group-hover:translate-x-1.5 transition-transform"
-                    fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    class="h-5 w-5 ml-3 group-hover:translate-x-1 transition-transform"
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                 </svg>
             </a>
 
             <button onclick="detectLocation(event)"
-                class="gpu-accelerated group inline-flex items-center justify-center px-8 py-5 border border-gray-100 text-base sm:text-lg font-bold rounded-2xl text-gray-800 bg-white shadow-xl active:scale-95 transition-all duration-300 w-full sm:w-auto whitespace-nowrap">
-                <span id="gps-icon" class="mr-2 text-xl sm:text-2xl transition-transform group-hover:rotate-12">📍</span>
+                class="gpu-accelerated group flex items-center justify-center gap-2 px-8 py-5 h-[62px] text-base font-bold rounded-2xl text-gray-800 bg-white shadow-xl hover:bg-gray-50 active:scale-95 transition-all duration-300 w-full sm:w-auto whitespace-nowrap">
+                <span class="text-xl">📍</span>
                 <span data-en="Use My Location" data-ta="இருப்பிடம்">Use My Location</span>
             </button>
         </div>
 
         <p
-            class="fade-in-up animate-delay-2 mt-12 text-[10px] md:text-xs text-gray-400 font-bold tracking-[0.3em] uppercase">
+            class="fade-in-up animate-delay-2 mt-16 text-[10px] md:text-sm text-gray-400 font-bold tracking-[0.4em] uppercase opacity-80">
             <span data-en="Live in your neighborhood" data-ta="உங்கள் அருகாமையில்">Live in your
                 neighborhood</span>
         </p>
+    </div>
     </div>
 </div>
 
@@ -208,13 +239,25 @@
         NEARVA_CATEGORIES.forEach(cat => {
             const card = document.createElement('a');
             card.href = `/map?category=${encodeURIComponent(cat.name)}`;
-            card.className = 'gpu-accelerated group flex flex-col items-center justify-center gap-y-4 aspect-square bg-white rounded-[32px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-gray-50 active:scale-95 transition-all duration-300 hover:shadow-[0_20px_40px_rgba(0,0,0,0.06)] hover:-translate-y-1';
+            card.className = 'relative gpu-accelerated group flex flex-col items-center justify-center gap-y-4 aspect-square bg-white rounded-[32px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-gray-50 active:scale-95 transition-all duration-300 hover:shadow-[0_20px_40px_rgba(0,0,0,0.06)] hover:-translate-y-1';
 
             // Generate color-specific background classes (Tailwind)
             const bgClass = `bg-${cat.color}-50/50`;
             const borderClass = `border-${cat.color}-100/50`;
 
+            // Generate Verified Badge
+            let badgeHtml = '';
+            const verifiedIds = ['cook', 'driver', 'baby-sitting', 'elder-care'];
+            if (verifiedIds.includes(cat.id)) {
+                badgeHtml = `
+                <div class="absolute top-2 right-2 md:top-3 md:right-3 bg-green-50 text-green-600 text-[9px] md:text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center shadow-sm border border-green-100 z-10" title="Verified Only">
+                    <svg class="w-3 h-3 mr-0.5" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+                    <span data-en="Verified Only" data-ta="சரிபார்க்கப்பட்டது">Verified Only</span>
+                </div>`;
+            }
+
             card.innerHTML = `
+                ${badgeHtml}
                 <div class="w-16 h-16 flex items-center justify-center ${bgClass} backdrop-blur-sm rounded-2xl border ${borderClass} transform group-hover:scale-110 transition-all duration-300">
                     <span class="text-3xl">${cat.icon}</span>
                 </div>

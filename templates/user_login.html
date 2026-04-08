@@ -1,0 +1,410 @@
+{% extends 'base.html' %}
+
+{% block title %}Login - Nearva{% endblock %}
+
+{% block head %}
+<style>
+    :root {
+        --bg-base: #f8fafc;
+        --bg-card: #ffffff;
+        --bg-elevated: #f1f5f9;
+        --border: #e2e8f0;
+        --accent: #2563eb;
+        --text-primary: #0f172a;
+        --text-muted: #64748b;
+    }
+    .otp-input-box {
+        width: 52px;
+        height: 58px;
+        text-align: center;
+        font-size: 1.5rem;
+        font-weight: 800;
+        border: 2px solid var(--border);
+        border-radius: 16px;
+        outline: none;
+        transition: all 0.2s;
+        background: var(--bg-elevated);
+        color: var(--text-primary);
+    }
+    .otp-input-box:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 20px rgba(99,102,241,0.2);
+        background: var(--bg-card);
+    }
+    .otp-input-box.filled {
+        border-color: #10b981;
+        background: #10b98110;
+    }
+    .phone-input-wrapper {
+        display: flex;
+        align-items: center;
+        border: 2px solid var(--border);
+        border-radius: 16px;
+        overflow: hidden;
+        transition: all 0.2s;
+        background: var(--bg-elevated);
+    }
+    .phone-input-wrapper:focus-within {
+        border-color: var(--accent);
+        box-shadow: 0 0 20px rgba(99,102,241,0.2);
+        background: var(--bg-card);
+    }
+    .phone-prefix {
+        padding: 0 16px;
+        font-weight: 800;
+        color: var(--accent);
+        font-size: 1rem;
+        background: transparent;
+        border-right: 2px solid var(--border);
+        display: flex;
+        align-items: center;
+        white-space: nowrap;
+        min-height: 56px;
+    }
+    .phone-input-field {
+        flex: 1;
+        padding: 16px;
+        font-size: 1rem;
+        font-weight: 700;
+        border: none;
+        outline: none;
+        background: transparent;
+        color: var(--text-primary);
+        letter-spacing: 0.05em;
+    }
+    .phone-input-field::placeholder {
+        font-weight: 500;
+        color: var(--text-muted);
+        letter-spacing: 0;
+    }
+    @keyframes slideUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    @keyframes pulse-ring {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(99,102,241,0.4); }
+        70% { transform: scale(1); box-shadow: 0 0 0 12px rgba(99,102,241,0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(99,102,241,0); }
+    }
+    .pulse-icon { animation: pulse-ring 2s ease-in-out infinite; }
+    .otp-section { display: none; }
+    .otp-section.visible { display: block; }
+    
+    .timer-text {
+        font-size: 0.875rem;
+        font-weight: 700;
+        color: var(--text-muted);
+    }
+    .resend-btn {
+        font-size: 0.875rem;
+        font-weight: 800;
+        color: var(--accent);
+        background: none;
+        border: none;
+        cursor: pointer;
+        transition: opacity 0.2s;
+    }
+    .resend-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+    .login-gradient {
+        background: radial-gradient(circle at top right, #f1f5f9 0%, #f8fafc 100%);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center px-4 pt-28 pb-24 login-gradient">
+    <div class="w-full max-w-md">
+        <div class="bg-white rounded-[32px] shadow-2xl shadow-blue-900/5 border border-slate-100 overflow-hidden" style="background:var(--bg-card)">
+            <div class="h-1.5 w-full bg-blue-600"></div>
+            <div class="p-8 md:p-10">
+                <!-- Header -->
+                <div class="text-center mb-10">
+                    <div class="inline-flex items-center justify-center w-20 h-20 bg-blue-50 rounded-3xl mb-6 pulse-icon border border-blue-100">
+                        <svg class="w-10 h-10 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                        </svg>
+                    </div>
+                    <h1 class="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">Login Portal</h1>
+                    <p class="text-slate-500 font-bold mt-2 text-sm uppercase tracking-widest opacity-80">Secure Home Access</p>
+                </div>
+
+                <!-- STEP 1: Phone Input -->
+                <div id="phone-section">
+                    <label class="text-[11px] font-black uppercase tracking-widest text-[#2563eb] mb-3 block">Mobile Number</label>
+                    <div class="phone-input-wrapper mb-6">
+                        <div class="phone-prefix">🇮🇳 +91</div>
+                        <input id="phone-input" type="tel" maxlength="10"
+                                placeholder="..."
+                                class="phone-input-field"
+                                inputmode="numeric" pattern="[0-9]*" autocomplete="tel"/>
+                    </div>
+                    <button id="send-otp-btn" onclick="sendOTP()"
+                            class="w-full py-5 rounded-2xl bg-blue-600 text-white font-black text-lg hover:bg-blue-700 active:scale-95 transition-all duration-300 shadow-xl shadow-blue-600/30 flex items-center justify-center gap-2">
+                        <span id="send-btn-text">Send OTP</span>
+                        <svg id="send-arrow" class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                        </svg>
+                        <svg id="send-spinner" class="w-6 h-6 animate-spin hidden" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </button>
+                    <p class="text-center mt-8 text-slate-400 text-[10px] font-bold uppercase tracking-[0.2em] opacity-80">Simple Secure Access</p>
+                </div>
+
+                <!-- STEP 2: OTP Input -->
+                <div id="otp-section" class="otp-section">
+                    <div class="slide-up">
+                        <div class="flex items-center gap-3 bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3 mb-6" id="dev-mode-msg" style="display: none;">
+                            <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                <svg class="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-[11px] font-black text-blue-700 uppercase tracking-widest">Sandbox Active</p>
+                                <p class="text-[10px] text-blue-500 font-medium">Auto-authorized for testing.</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between mb-4">
+                            <label class="text-[11px] font-black uppercase tracking-widest text-[#2563eb] block">Verification Code</label>
+                            <button onclick="resetToPhone()" class="text-[10px] font-bold text-slate-400 hover:text-blue-600 uppercase tracking-wider transition-colors pt-1">Change Number</button>
+                        </div>
+                        
+                        <div class="flex gap-3 justify-center mb-6" id="otp-boxes">
+                            <input type="tel" maxlength="1" class="otp-input-box" id="otp-0" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code"/>
+                            <input type="tel" maxlength="1" class="otp-input-box" id="otp-1" inputmode="numeric" pattern="[0-9]*"/>
+                            <input type="tel" maxlength="1" class="otp-input-box" id="otp-2" inputmode="numeric" pattern="[0-9]*"/>
+                            <input type="tel" maxlength="1" class="otp-input-box" id="otp-3" inputmode="numeric" pattern="[0-9]*"/>
+                        </div>
+
+                        <div class="flex items-center justify-between mb-8">
+                            <div id="countdown-wrapper" class="timer-text">
+                                Resend in <span id="timer">00:30</span>
+                            </div>
+                            <button id="resend-btn" onclick="resendOTP()" class="resend-btn" style="display: none;">Resend OTP</button>
+                        </div>
+
+                        <button id="verify-otp-btn" onclick="verifyOTP()"
+                                class="w-full py-5 rounded-2xl bg-blue-600 text-white font-black text-lg hover:bg-blue-700 active:scale-95 transition-all duration-300 shadow-xl shadow-blue-600/30 flex items-center justify-center gap-2">
+                            <span id="verify-btn-text">Verify & Login</span>
+                            <svg id="verify-arrow" class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                            <svg id="verify-spinner" class="w-6 h-6 animate-spin hidden" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Status Messages -->
+                <div id="status-box" class="hidden mt-6 rounded-2xl px-5 py-4 border animate-in fade-in slide-in-from-bottom-2 duration-300 items-start gap-4">
+                    <span id="status-icon" class="text-xl"></span>
+                    <div class="flex-1">
+                        <p id="status-title" class="text-sm font-bold"></p>
+                        <p id="status-text" class="text-xs font-medium opacity-90 mt-0.5"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const NEXT_URL = "{{ next_url or '/' }}";
+    let currentPhone = '';
+    let countdownTimer = null;
+
+    // ── UI Helpers ───────────────────────────────────────────────────────
+    function showStatus(type, title, message) {
+        const box = document.getElementById('status-box');
+        const icon = document.getElementById('status-icon');
+        const titleEl = document.getElementById('status-title');
+        const textEl = document.getElementById('status-text');
+
+        box.className = 'mt-6 rounded-2xl px-5 py-4 border flex items-start gap-4 ';
+        if (type === 'error') {
+            box.classList.add('bg-red-50', 'border-red-100', 'text-red-700');
+            icon.textContent = '⚠️';
+        } else if (type === 'success') {
+            box.classList.add('bg-green-50', 'border-green-100', 'text-green-700');
+            icon.textContent = '✅';
+        }
+
+        titleEl.textContent = title;
+        textEl.textContent = message;
+        box.classList.remove('hidden');
+    }
+
+    function hideStatus() {
+        document.getElementById('status-box').classList.add('hidden');
+    }
+
+    function startTimer(duration) {
+        let timer = duration, minutes, seconds;
+        const display = document.querySelector('#timer');
+        const wrapper = document.querySelector('#countdown-wrapper');
+        const resendBtn = document.querySelector('#resend-btn');
+
+        wrapper.style.display = 'block';
+        resendBtn.style.display = 'none';
+
+        clearInterval(countdownTimer);
+        countdownTimer = setInterval(function () {
+            minutes = parseInt(timer / 60, 10);
+            seconds = parseInt(timer % 60, 10);
+
+            minutes = minutes < 10 ? "0" + minutes : minutes;
+            seconds = seconds < 10 ? "0" + seconds : seconds;
+
+            display.textContent = minutes + ":" + seconds;
+
+            if (--timer < 0) {
+                clearInterval(countdownTimer);
+                wrapper.style.display = 'none';
+                resendBtn.style.display = 'block';
+            }
+        }, 1000);
+    }
+
+    function resetToPhone() {
+        location.reload();
+    }
+
+    // ── OTP Boxes Logic ──────────────────────────────────────────────────
+    const otpBoxes = document.querySelectorAll('.otp-input-box');
+    otpBoxes.forEach((box, i) => {
+        box.addEventListener('input', (e) => {
+            const val = e.target.value.replace(/[^0-9]/g, '');
+            e.target.value = val;
+            if (val) {
+                box.classList.add('filled');
+                if (i < 3) otpBoxes[i+1].focus();
+            } else {
+                box.classList.remove('filled');
+            }
+        });
+        box.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' && !e.target.value && i > 0) {
+                otpBoxes[i-1].focus();
+                otpBoxes[i-1].value = '';
+                otpBoxes[i-1].classList.remove('filled');
+            }
+        });
+    });
+
+    // ── Network Actions ──────────────────────────────────────────────────
+    async function sendOTP() {
+        const phone = document.getElementById('phone-input').value.replace(/[^0-9]/g, '');
+        if (phone.length !== 10) { showStatus('error', 'Invalid Number', 'Please enter a valid 10-digit mobile number.'); return; }
+        
+        hideStatus();
+        document.getElementById('send-otp-btn').disabled = true;
+        document.getElementById('send-spinner').classList.remove('hidden');
+        document.getElementById('send-arrow').classList.add('hidden');
+        document.getElementById('send-btn-text').textContent = 'Sending...';
+
+        try {
+            const res = await fetch('/api/user/send-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone })
+            });
+            const data = await res.json();
+            
+            if (res.ok && data.status === 'success') {
+                currentPhone = phone;
+                document.getElementById('phone-section').classList.add('hidden');
+                document.getElementById('otp-section').classList.add('visible');
+                
+                // Show Dev Message if detected
+                if (data.message.includes('Dev Mode')) {
+                    document.getElementById('dev-mode-msg').style.display = 'flex';
+                }
+                
+                startTimer(30);
+                setTimeout(() => otpBoxes[0].focus(), 200);
+            } else {
+                throw new Error(data.detail || 'OTP delivery failed. Please try again.');
+            }
+        } catch(err) {
+            showStatus('error', 'Delivery Failed', err.message);
+            document.getElementById('send-otp-btn').disabled = false;
+            document.getElementById('send-spinner').classList.add('hidden');
+            document.getElementById('send-arrow').classList.remove('hidden');
+            document.getElementById('send-btn-text').textContent = 'Get OTP';
+        }
+    }
+
+    async function resendOTP() {
+        hideStatus();
+        const resendBtn = document.getElementById('resend-btn');
+        resendBtn.disabled = true;
+        resendBtn.textContent = 'Sending...';
+        
+        try {
+            const res = await fetch('/api/user/send-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: currentPhone })
+            });
+            const data = await res.json();
+            if (res.ok && data.status === 'success') {
+                showStatus('success', 'OTP Resent', 'A new code has been sent to your device.');
+                startTimer(30);
+            } else {
+                throw new Error(data.detail || 'Could not resend OTP.');
+            }
+        } catch(err) {
+            showStatus('error', 'Resend Failed', err.message);
+            resendBtn.disabled = false;
+        } finally {
+            resendBtn.textContent = 'Resend OTP';
+        }
+    }
+
+    async function verifyOTP() {
+        const otp = [...otpBoxes].map(b => b.value).join('');
+        if (otp.length !== 4) return;
+
+        hideStatus();
+        document.getElementById('verify-otp-btn').disabled = true;
+        document.getElementById('verify-spinner').classList.remove('hidden');
+        document.getElementById('verify-arrow').classList.add('hidden');
+        document.getElementById('verify-btn-text').textContent = 'Verifying...';
+
+        try {
+            const res = await fetch('/api/user/verify-otp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone: currentPhone, otp, next: NEXT_URL })
+            });
+            const data = await res.json();
+            if (res.ok && data.status === 'success') {
+                window.location.href = data.redirect || '/';
+            } else {
+                throw new Error(data.detail || 'The OTP you entered is incorrect.');
+            }
+        } catch(err) {
+            showStatus('error', 'Verification Failed', err.message);
+            document.getElementById('verify-otp-btn').disabled = false;
+            document.getElementById('verify-spinner').classList.add('hidden');
+            document.getElementById('verify-arrow').classList.remove('hidden');
+            document.getElementById('verify-btn-text').textContent = 'Verify & Login';
+            
+            // Clear boxes on error
+            otpBoxes.forEach(b => { b.value = ''; b.classList.remove('filled'); });
+            otpBoxes[0].focus();
+        }
+    }
+</script>
+{% endblock %}

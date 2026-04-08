@@ -875,6 +875,10 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     window.openWorkerFromList = function (workerId) {
+        if (typeof IS_USER_LOGGED_IN !== 'undefined' && !IS_USER_LOGGED_IN) {
+            window.openLoginModal();
+            return;
+        }
         const worker = window.lastFilteredWorkers.find(w => w.id === parseInt(workerId));
         if (worker) {
             const marker = markerMap.get(worker.id);
@@ -1078,18 +1082,20 @@ document.addEventListener("DOMContentLoaded", function () {
                     </div>
                     
                     <div class="grid grid-cols-2 gap-3 w-full pb-8">
-                        <a href="tel:${safeWorker.phone}"
+                        <button onclick="gatedCall('${safeWorker.phone}', '${worker.id}')"
                             class="flex items-center justify-center gap-2 bg-blue-600 text-white text-[15px] font-bold py-4 px-4 rounded-2xl shadow-lg shadow-blue-500/20 active:scale-95 transition-all">
                             <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
                             </svg>
                             Call Now
-                        </a>
-                        <a href="https://wa.me/${safeWorker.phone}" target="_blank"
+                        </button>
+                        <button onclick="window.location.href = '/user/dashboard?tab=chat&workerId=${worker.id}&workerName=${encodeURIComponent(safeWorker.name)}'"
                             class="flex items-center justify-center gap-2 bg-white text-gray-900 border-2 border-gray-100 text-[15px] font-bold py-4 px-4 rounded-2xl shadow-sm active:scale-95 transition-all">
-                            <img src="https://nearva.in/static/images/whatsapp.png" class="w-5 h-5 grayscale opacity-80" onerror="this.style.display='none'">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                            </svg>
                             Message
-                        </a>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1132,6 +1138,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // High-Integrity Bottom Sheet Opener
     window.openWorkerPopup = function (worker, marker) {
+        if (typeof IS_USER_LOGGED_IN !== 'undefined' && !IS_USER_LOGGED_IN) {
+            window.openLoginModal();
+            return;
+        }
         if (!worker || !marker) return;
         console.log("📂 Processing worker profile opening...");
 
@@ -1470,6 +1480,30 @@ document.addEventListener("DOMContentLoaded", function () {
     } else {
         locateUser();
     }
+
+    // --- LOGIN MODAL CONTROLS ---
+    window.openLoginModal = function() {
+        const modal = document.getElementById('login-modal');
+        const content = document.getElementById('login-modal-content');
+        if (!modal || !content) return;
+        
+        modal.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
+        modal.classList.add('opacity-100', 'pointer-events-auto');
+        content.classList.remove('translate-y-8');
+        content.classList.add('translate-y-0');
+    };
+
+    window.closeLoginModal = function() {
+        const modal = document.getElementById('login-modal');
+        const content = document.getElementById('login-modal-content');
+        if (!modal || !content) return;
+        
+        modal.classList.remove('opacity-100', 'pointer-events-auto');
+        modal.classList.add('opacity-0', 'pointer-events-none');
+        content.classList.remove('translate-y-0');
+        content.classList.add('translate-y-8');
+        setTimeout(() => modal.classList.add('hidden'), 300);
+    };
 
     // Refresh every 15s (increased from 10s for performance)
     setInterval(() => {

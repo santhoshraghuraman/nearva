@@ -1,34 +1,30 @@
--- ==============================================================================
--- Migration script to add Community Ambassador System to Supabase
+-- Nearva Ambassador System Migration
 -- Run this in your Supabase SQL Editor
--- ==============================================================================
 
--- 1. Create the ambassadors table
-CREATE TABLE IF NOT EXISTS public.ambassadors (
+-- 1. Create ambassadors table if it doesn't exist
+CREATE TABLE IF NOT EXISTS ambassadors (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     name TEXT NOT NULL,
     phone TEXT NOT NULL UNIQUE,
     area TEXT NOT NULL,
-    status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive'))
+    password_hash TEXT,
+    status TEXT DEFAULT 'active',
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 2. Modify the workers table to link to ambassadors (Optional)
-ALTER TABLE public.workers 
-ADD COLUMN IF NOT EXISTS ambassador_id UUID REFERENCES public.ambassadors(id) ON DELETE SET NULL;
+-- 2. Add password_hash column if table already exists (safe idempotent alter)
+ALTER TABLE ambassadors ADD COLUMN IF NOT EXISTS password_hash TEXT;
+ALTER TABLE ambassadors ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'active';
+ALTER TABLE ambassadors ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
 
--- 3. Enable RLS on ambassadors
-ALTER TABLE public.ambassadors ENABLE ROW LEVEL SECURITY;
+-- 3. Enable Row Level Security (public access for now – tighten later)
+ALTER TABLE ambassadors ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public read ambassadors" ON ambassadors;
+CREATE POLICY "Public read ambassadors" ON ambassadors FOR ALL USING (true);
 
--- 4. Create RLS Policies for ambassadors
--- Allow public to see active ambassadors (for registration dropdown and homepage)
-CREATE POLICY "Allow Public Read Access" ON public.ambassadors
-FOR SELECT USING (status = 'active');
+-- 4. Index for fast phone lookup (login)
+CREATE INDEX IF NOT EXISTS idx_ambassadors_phone ON ambassadors(phone);
 
--- Allow admin full access (Since MVP uses general policies)
-CREATE POLICY "Allow All Access Admin" ON public.ambassadors
-FOR ALL USING (true);
-
--- 5. Expose foreign key relation to PostgREST
--- PostgREST will automatically pick up the foreign key `ambassador_id`, 
--- allowing queries like `select=*,ambassadors(name)`
+-- Done!
+SELECT 'Ambassador migration complete.' AS result;

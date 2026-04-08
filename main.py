@@ -7,13 +7,17 @@ from dotenv import load_dotenv
 import os
 import uvicorn
 import bcrypt
+import hashlib
+import secrets
 from starlette.middleware.sessions import SessionMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from datetime import datetime, timezone
 from contextlib import asynccontextmanager
+from fastapi_socketio import SocketManager
 
-# Load environment variables
-load_dotenv()
+# Load environment variables explicitly
+load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
+print(f"DEBUG: OTP_DEV_MODE is {os.environ.get('OTP_DEV_MODE')}")
 
 import cloudinary
 import cloudinary.uploader
@@ -50,6 +54,65 @@ async def lifespan(app: FastAPI):
     await http_client.aclose()
 
 app = FastAPI(lifespan=lifespan)
+sm = SocketManager(app=app, mount_location='/socket.io')
+sio = sm._sio
+
+@sio.on('join-room')
+async def handle_join_room(sid, data):
+    room_id = data.get('roomId')
+    if room_id:
+        sio.enter_room(sid, room_id)
+        print(f"User joined: {room_id}")
+
+@sio.on('join')
+async def handle_join(sid, data):
+    user_id = data.get('user_id') # Personal notification room
+    if user_id:
+        sio.enter_room(sid, str(user_id))
+
+@sio.on('leave')
+async def handle_leave(sid, data):
+    room_id = data.get('roomId')
+    if room_id:
+        sio.leave_room(sid, room_id)
+
+@sio.on('send-message')
+async def handle_send_message(sid, data):
+    room_id = data.get('roomId')
+    message = data.get('message', '').strip()
+    sender_id = data.get('senderId')
+    sender_type = data.get('senderType')
+    
+    if room_id and message:
+        print(f"Message received: {data}")
+        # Broadcast to all in the room
+        await sio.emit('receive-message', {
+            'roomId': room_id,
+            'sender_id': sender_id,
+            'sender_type': sender_type,
+            'message': message,
+            'created_at': "now()" # Placeholder or iso format
+        }, room=room_id)
+
+@sio.on('typing')
+async def handle_typing(sid, data):
+    room_id = data.get('roomId')
+    is_typing = data.get('typing', False)
+    if room_id:
+        await sio.emit('typing-status', {
+            'typing': is_typing, 
+            'roomId': room_id
+        }, room=room_id, skip_sid=sid)
+
+@sio.on('delete-message')
+async def handle_delete_message(sid, data):
+    room_id = data.get('roomId')
+    message_id = data.get('messageId')
+    if room_id and message_id:
+        await sio.emit('message-deleted', {
+            'roomId': room_id,
+            'messageId': message_id
+        }, room=room_id)
 
 # Add Middlewares
 app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SESSION_SECRET_KEY", "fallback-secret-key-123"))
@@ -85,12 +148,16 @@ templates.env.cache = None # Fix: Disable Jinja2 cache for Vercel production sta
 @app.middleware("http")
 async def add_cache_control_header(request: Request, call_next):
     response = await call_next(request)
+    path = request.url.path
     
-    # Static Assets: Cache for 1 hour to prevent repeat-request jitter
-    if request.url.path.startswith("/static"):
-        response.headers["Cache-Control"] = "public, max-age=3600"
+    # Static Assets: Intensive caching for immutable types
+    if path.startswith("/static"):
+        if any(path.endswith(ext) for ext in [".png", ".jpg", ".jpeg", ".webp", ".mp4", ".svg", ".css", ".js"]):
+            response.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=3600"
+        else:
+            response.headers["Cache-Control"] = "public, max-age=3600"
     else:
-        # Dynamic Content: No cache to ensure data freshness (Real-time status)
+        # Dynamic Content: No cache to ensure data freshness
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
@@ -142,7 +209,27 @@ async def get_workers(category: str = "All", lat: float = None, lng: float = Non
 
 @app.get("/map", response_class=HTMLResponse)
 async def map_page(request: Request, category: str = "All"):
-    return templates.TemplateResponse(request=request, name="map.html", context={"category": category})
+    user_id    = request.session.get("user_id", "")
+    user_phone = request.session.get("user_phone", "")
+    return templates.TemplateResponse(request=request, name="map.html", context={
+        "category": category,
+        "user_id": user_id,
+        "user_phone": user_phone
+    })
+
+
+@app.get("/user/dashboard", response_class=HTMLResponse)
+async def user_dashboard(request: Request):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return RedirectResponse(url="/user/login")
+    return templates.TemplateResponse(request=request, name="user_dashboard.html")
+
+@app.get("/api/user/logout")
+async def user_logout(request: Request):
+    request.session.pop("user_id", None)
+    request.session.pop("user_phone", None)
+    return RedirectResponse(url="/")
 
 @app.get("/register", response_class=HTMLResponse)
 async def register_page(request: Request):
@@ -171,6 +258,314 @@ async def privacy_page(request: Request):
 async def terms_page(request: Request):
     return templates.TemplateResponse(request=request, name="terms.html")
 
+
+# ── IN-APP CHAT & JOB REQUEST SYSTEM ──────────────────────────────────────
+
+@app.post("/api/messages/send")
+async def send_message(request: Request):
+    try:
+        body = await request.json()
+        chat_id     = body.get("chat_id", "") or body.get("roomId", "")
+        sender_id   = body.get("sender_id", "") or body.get("senderId", "")
+        sender_type = body.get("sender_type", "")  # 'user' or 'worker'
+        message     = body.get("message", "").strip()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid request body.")
+
+    if not all([chat_id, sender_id, sender_type, message]):
+        raise HTTPException(status_code=422, detail="Missing required fields.")
+
+    # Persist to database
+    res = await supabase_request("POST", "messages", data={
+        "chat_id": chat_id,
+        "sender_id": sender_id,
+        "sender_type": sender_type,
+        "message": message
+    })
+    if not res.is_success:
+        raise HTTPException(status_code=500, detail="Message persistence failed.")
+        
+    res_json = res.json()
+    msg_data = res_json[0] if isinstance(res_json, list) else res_json
+
+    # Real-time Broadcast to the Room
+    await sio.emit("receive-message", {
+        "roomId": chat_id,
+        "sender_id": sender_id,
+        "sender_type": sender_type,
+        "message": message,
+        "created_at": msg_data.get("created_at")
+    }, room=chat_id)
+
+    # Real-time Notification to Recipient (for badges)
+    # Recipient is user_id if worker sent, or worker_id if user sent
+    recipient_id = chat_id.split("_worker_")[1] if sender_type == "user" else chat_id.split("_worker_")[0].replace("user_", "")
+    await sio.emit("notify_message", {"roomId": chat_id, "message": message}, room=str(recipient_id))
+
+    return JSONResponse({"status": "success", "data": msg_data})
+
+
+@app.get("/api/messages/{chat_id}")
+async def get_messages(chat_id: str):
+    res = await supabase_request("GET", f"messages?chat_id=eq.{chat_id}&order=created_at.asc&limit=200")
+    return JSONResponse({"status": "success", "messages": res.json()})
+
+
+@app.delete("/api/messages/{message_id}")
+async def delete_message(message_id: str):
+    res = await supabase_request("DELETE", f"messages?id=eq.{message_id}")
+    return JSONResponse({"status": "success", "message": "Deleted successfully"})
+
+
+def mask_phone(ph: str) -> str:
+    if not ph: return "User"
+    clean = "".join(filter(str.isdigit, ph))
+    if len(clean) < 2: return "User"
+    return "********" + clean[-2:]
+
+
+@app.get("/api/chats/worker/{worker_id}")
+async def get_worker_chats(worker_id: str):
+    """Returns all unique chats for a worker, with last message and user info."""
+    res = await supabase_request(
+        "GET", f"messages?chat_id=like.*_worker_{worker_id}*&order=created_at.desc&limit=500"
+    )
+    messages = res.json()
+
+    seen = {}
+    for m in messages:
+        cid = m["chat_id"]
+        if cid not in seen:
+            seen[cid] = m
+    
+    chats = list(seen.values())
+    
+    # Enrichment: User Phone Numbers
+    user_ids = list(set([cid.split("_worker_")[0].replace("user_", "") for cid in seen.keys() if "user_" in cid]))
+    if user_ids:
+        # Batch fetch user phones
+        ids_str = ",".join([f"{uid}" for uid in user_ids])
+        u_res = await supabase_request("GET", f"users?id=in.({ids_str})&select=id,phone")
+        users_map = {u["id"]: u["phone"] for u in u_res.json()}
+        for chat in chats:
+            uid = chat["chat_id"].split("_worker_")[0].replace("user_", "")
+            raw_phone = users_map.get(uid, "Unknown User")
+            chat["user_phone"] = mask_phone(raw_phone)
+            
+    return JSONResponse({"status": "success", "chats": chats})
+
+
+@app.get("/api/chats/user/{user_id}")
+async def get_user_chats(user_id: str):
+    """Returns all unique chats for a user, with last message and worker info."""
+    res = await supabase_request(
+        "GET", f"messages?chat_id=like.user_{user_id}_worker_*&order=created_at.desc&limit=500"
+    )
+    messages = res.json()
+    seen = {}
+    for m in messages:
+        cid = m["chat_id"]
+        if cid not in seen:
+            seen[cid] = m
+            
+    chats = list(seen.values())
+
+    # Enrichment: Worker Names
+    worker_ids = list(set([cid.split("_worker_")[1] for cid in seen.keys() if "_worker_" in cid]))
+    if worker_ids:
+        # Batch fetch worker names
+        ids_str = ",".join([f"{wid}" for wid in worker_ids])
+        w_res = await supabase_request("GET", f"workers?id=in.({ids_str})&select=id,name")
+        workers_map = {w["id"]: w["name"] for w in w_res.json()}
+        for chat in chats:
+            wid = chat["chat_id"].split("_worker_")[1]
+            chat["worker_name"] = workers_map.get(wid, "Worker")
+            
+    return JSONResponse({"status": "success", "chats": chats})
+
+
+@app.post("/api/jobs/request")
+async def create_job_request(request: Request):
+    try:
+        body = await request.json()
+        user_id    = body.get("user_id", "")
+        user_phone = body.get("user_phone", "")
+        worker_id  = body.get("worker_id", "")
+        service    = body.get("service", "")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid request body.")
+
+    if not all([user_id, worker_id]):
+        raise HTTPException(status_code=422, detail="user_id and worker_id are required.")
+
+    # Check if a pending/accepted request already exists between this pair
+    check = await supabase_request(
+        "GET", f"job_requests?user_id=eq.{user_id}&worker_id=eq.{worker_id}&status=in.(pending,accepted,in_progress)&select=id"
+    )
+    if check.json():
+        return JSONResponse({"status": "exists", "message": "Request already active."})
+
+    res = await supabase_request("POST", "job_requests", data={
+        "user_id": user_id,
+        "user_phone": user_phone,
+        "worker_id": worker_id,
+        "service": service,
+        "status": "pending",
+    })
+    job_data = res.json()[0] if isinstance(res.json(), list) else res.json()
+
+    # Real-time Notification to Worker
+    await sio.emit("new_job", job_data, room=f"worker_{worker_id}")
+
+    return JSONResponse({"status": "success", "job": job_data})
+
+
+@app.get("/api/jobs/worker/{worker_id}")
+async def get_worker_jobs(worker_id: str):
+    res = await supabase_request(
+        "GET", f"job_requests?worker_id=eq.{worker_id}&order=created_at.desc&limit=50"
+    )
+    jobs = res.json()
+    for j in jobs:
+        if j.get("user_phone"):
+            j["user_phone"] = mask_phone(j["user_phone"])
+    return JSONResponse({"status": "success", "jobs": jobs})
+
+
+@app.get("/api/jobs/user/{user_id}")
+async def get_user_jobs(user_id: str):
+    """Returns all jobs for a user, enriched with worker names."""
+    res = await supabase_request(
+        "GET", f"job_requests?user_id=eq.{user_id}&order=created_at.desc&limit=50"
+    )
+    jobs = res.json()
+    
+    # Enrichment: Worker Names
+    worker_ids = list(set([j["worker_id"] for j in jobs if j.get("worker_id")]))
+    if worker_ids:
+        ids_str = ",".join([f"{wid}" for wid in worker_ids])
+        w_res = await supabase_request("GET", f"workers?id=in.({ids_str})&select=id,name")
+        worker_map = {w["id"]: w["name"] for w in w_res.json()}
+        for j in jobs:
+            j["worker_name"] = worker_map.get(j["worker_id"], "Worker")
+            
+    return JSONResponse({"status": "success", "jobs": jobs})
+
+
+@app.patch("/api/jobs/{job_id}/status")
+async def update_job_status(job_id: str, request: Request):
+    try:
+        body = await request.json()
+        new_status = body.get("status", "")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid request body.")
+
+    allowed = {"pending", "accepted", "rejected", "in_progress", "completed"}
+    if new_status not in allowed:
+        raise HTTPException(status_code=422, detail=f"Status must be one of {allowed}")
+
+    from datetime import datetime, timezone
+    res = await supabase_request("PATCH", f"job_requests?id=eq.{job_id}", data={
+        "status": new_status,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    })
+    job_data = res.json()[0] if isinstance(res.json(), list) else res.json()
+
+    # Real-time Notification to User
+    # We need user_id from the job record
+    full_job_res = await supabase_request("GET", f"job_requests?id=eq.{job_id}&select=user_id")
+    if full_job_res.json():
+        target_user_id = full_job_res.json()[0].get("user_id")
+        await sio.emit("job_updated", {"job_id": job_id, "status": new_status}, room=f"user_{target_user_id}")
+
+    return JSONResponse({"status": "success", "job": job_data})
+
+
+@app.post("/api/feedbacks")
+async def submit_feedback(request: Request):
+    try:
+        body = await request.json()
+        job_id    = body.get("job_id")
+        user_id   = body.get("user_id")
+        worker_id = body.get("worker_id")
+        rating    = int(body.get("rating"))
+        comment   = body.get("comment", "").strip()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid feedback data.")
+
+    if not all([job_id, user_id, worker_id, rating]):
+        raise HTTPException(status_code=422, detail="Missing required feedback fields.")
+
+    if rating < 1 or rating > 5:
+        raise HTTPException(status_code=422, detail="Rating must be between 1 and 5.")
+
+    # Check if feedback already exists for this job
+    check = await supabase_request("GET", f"feedbacks?job_id=eq.{job_id}&select=id")
+    if check.json():
+         return JSONResponse({"status": "exists", "message": "Feedback already submitted."})
+
+    res = await supabase_request("POST", "feedbacks", data={
+        "job_id": job_id,
+        "user_id": user_id,
+        "worker_id": worker_id,
+        "rating": rating,
+        "comment": comment
+    })
+    
+    # Update worker's rating_avg and review_count (Simplistic version)
+    # In a real app, this would be a database function or trigger
+    w_res = await supabase_request("GET", f"workers?id=eq.{worker_id}&select=rating_avg,review_count")
+    workers = w_res.json()
+    if workers:
+        w = workers[0]
+        new_count = (w['review_count'] or 0) + 1
+        curr_avg = w['rating_avg'] or 4.5
+        new_avg = ((curr_avg * (new_count - 1)) + rating) / new_count
+        await supabase_request("PATCH", f"workers?id=eq.{worker_id}", data={
+            "rating_avg": round(new_avg, 1),
+            "review_count": new_count
+        })
+
+    return JSONResponse({"status": "success", "data": res.json()})
+
+
+
+# ── SOCKET.IO HANDLERS ──────────────────────────────────────────────────────
+
+@sio.on("connect")
+async def handle_connect(sid, environ):
+    pass
+
+@sio.on("register")
+async def handle_register(sid, data):
+    # data: { "id": "user_123" or "worker_456" }
+    uid = data.get("id")
+    if uid:
+        await sio.enter_room(sid, str(uid))
+        print(f"Socket registered: {uid} (sid: {sid})")
+
+@sio.on("join")
+async def handle_join(sid, data):
+    # data: { "chat_id": "..." }
+    chat_id = data.get("chat_id")
+    if chat_id:
+        await sio.enter_room(sid, chat_id)
+        print(f"Socket joined room: {chat_id}")
+
+@sio.on("leave")
+async def handle_leave(sid, data):
+    chat_id = data.get("chat_id")
+    if chat_id:
+        await sio.leave_room(sid, chat_id)
+
+@sio.on("typing")
+async def handle_typing(sid, data):
+    # data: { "chat_id": "...", "sender_id": "...", "is_typing": bool }
+    chat_id = data.get("chat_id")
+    if chat_id:
+        await sio.emit("user_typing", data, room=chat_id, skip_sid=sid)
+
+# ── END SOCKET.IO HANDLERS ──────────────────────────────────────────────────
 
 # --- API Endpoints ---
 # (Removed duplicate /api/workers route here)
@@ -219,21 +614,38 @@ async def register_worker(
         "completed_jobs": 0
     }
     
-    ambassador_name = None
-    ambassador_phone = None
     if ambassador_id:
-        worker_data["ambassador_id"] = ambassador_id
-        # fetch ambassador details to return to frontend for whatsapp link
-        amb_res = await supabase_request("GET", f"ambassadors?id=eq.{ambassador_id}")
-        ambs = amb_res.json()
-        if ambs:
-            ambassador_name = ambs[0].get("name")
-            ambassador_phone = ambs[0].get("phone")
-    
+        # Try finding by UUID first, then by referral_code
+        amb_id_resolved = None
+        
+        if len(ambassador_id) == 36 and "-" in ambassador_id:
+            # Looks like a UUID
+            amb_res = await supabase_request("GET", f"ambassadors?id=eq.{ambassador_id}")
+            ambs = amb_res.json()
+            if ambs:
+                amb_id_resolved = ambs[0].get("id")
+                ambassador_name = ambs[0].get("name")
+                ambassador_phone = ambs[0].get("phone")
+        
+        if not amb_id_resolved:
+            # Try finding by referral_code (case-insensitive)
+            amb_res = await supabase_request("GET", f"ambassadors?referral_code=ilike.{ambassador_id}")
+            ambs = amb_res.json()
+            if ambs:
+                amb_id_resolved = ambs[0].get("id")
+                ambassador_name = ambs[0].get("name")
+                ambassador_phone = ambs[0].get("phone")
+
+        if amb_id_resolved:
+            worker_data["ambassador_id"] = amb_id_resolved
+            print(f"[REG] Linked worker {name} to ambassador {ambassador_name} ({amb_id_resolved})")
+        else:
+            print(f"[REG] Warning: Could not resolve ambassador_id '{ambassador_id}'")
+
     result = await supabase_request("POST", "workers", data=worker_data)
     if not result.is_success:
         print(f"Supabase Error: {result.status_code} - {result.text}")
-        return JSONResponse({"status": "error", "message": "Database error occurred."}, status_code=500)
+        return JSONResponse({"status": "error", "message": "Database error occurred. Please ensure DB migration is run."}, status_code=500)
         
     return JSONResponse({
         "status": "success", 
@@ -302,8 +714,50 @@ async def toggle_availability(worker_id: str):
 
 @app.get("/api/ambassadors")
 async def get_ambassadors():
-    response = await supabase_request("GET", "ambassadors?status=eq.active&select=id,name,area,phone,workers(name,service,area,is_online)&workers.account_status=eq.Approved")
-    return response.json()
+    # Fetch all active ambassadors
+    amb_resp = await supabase_request("GET", "ambassadors?status=eq.active&select=id,name,area,phone&order=name.asc")
+    ambs = amb_resp.json() if amb_resp.is_success else []
+    
+    # Efficiently fetch worker counts
+    if ambs:
+        try:
+            counts_resp = await supabase_request("GET", "workers?select=ambassador_id,account_status&ambassador_id=not.is.null")
+            if counts_resp.is_success:
+                workers_raw = counts_resp.json()
+                from collections import defaultdict
+                stats_map = defaultdict(lambda: {"total": 0, "approved": 0, "pending": 0})
+                for w in workers_raw:
+                    aid = w.get("ambassador_id")
+                    if aid:
+                        stats_map[aid]["total"] += 1
+                        if w.get("account_status") == "Approved":
+                            stats_map[aid]["approved"] += 1
+                        else:
+                            stats_map[aid]["pending"] += 1
+                for amb in ambs:
+                    amb["stats"] = stats_map.get(amb["id"], {"total": 0, "approved": 0, "pending": 0})
+        except Exception as e:
+            for amb in ambs:
+                amb["stats"] = {"total": 0, "approved": 0, "pending": 0}
+                
+    return JSONResponse(ambs)
+
+@app.get("/api/public/ambassador/{ambassador_id}/stats")
+async def public_ambassador_stats(ambassador_id: str):
+    """Fetch live stats for a specific ambassador for UI expansions."""
+    if not ambassador_id: return JSONResponse({"error": "Missing ID"}, status_code=400)
+    
+    try:
+        resp = await supabase_request("GET", f"workers?select=account_status&ambassador_id=eq.{ambassador_id}")
+        workers = resp.json() if resp.is_success else []
+        
+        total = len(workers)
+        approved = len([w for w in workers if w.get("account_status") == "Approved"])
+        pending = total - approved
+        
+        return JSONResponse({"total_workers": total, "approved_workers": approved, "pending_workers": pending})
+    except:
+        return JSONResponse({"total_workers": 0, "approved_workers": 0, "pending_workers": 0})
 
 @app.post("/api/admin/ambassadors")
 async def create_ambassador(request: Request, name: str = Form(...), phone: str = Form(...), area: str = Form(...)):
@@ -316,17 +770,7 @@ async def create_ambassador(request: Request, name: str = Form(...), phone: str 
     if res.status_code >= 400: return JSONResponse({"status": "error", "message": res.text}, status_code=400)
     return {"status": "success"}
 
-@app.get("/api/admin/ambassadorsList")
-async def get_admin_ambassadors(request: Request):
-    if not request.session.get("admin_logged_in"):
-        return JSONResponse({"status": "error"}, status_code=401)
-    response = await supabase_request("GET", "ambassadors?select=id,name,phone,area,status,created_at,workers(count)&order=created_at.desc")
-    # If the subquery on workers(count) fails because of Supabase version, we'll try catching it.
-    if response.status_code >= 400:
-        # Fallback without count
-        response = await supabase_request("GET", "ambassadors?select=*&order=created_at.desc")
-    
-    return response.json()
+
 
 @app.post("/api/admin/ambassadors/{id}/toggle")
 async def toggle_ambassador(request: Request, id: str):
@@ -495,8 +939,280 @@ async def worker_update(
     await supabase_request("PATCH", f"workers?id=eq.{id}", data=data)
     return {"status": "success", "is_online": is_online, "availability": availability}
 
-# Basic in-memory rate limiter
+# ── USER OTP LOGIN (MSG91) ─────────────────────────────────────────────────────
+
+MSG91_SEND_URL = "https://api.msg91.com/api/v5/otp"
+MSG91_VERIFY_URL = "https://api.msg91.com/api/v5/otp/verify"
+
+# In-memory rate limiter for OTP (phone → list of timestamps)
+USER_OTP_LIMITER: dict = {}
+# In-memory OTP store for dev mode (phone → {otp, expires_at})
+DEV_OTP_STORE = {}
+
+def _check_otp_rate_limit(phone: str):
+    """Allow max 3 OTP send attempts per 5 minutes per phone number."""
+    now = datetime.now(timezone.utc).timestamp()
+    history = USER_OTP_LIMITER.get(phone, [])
+    history = [t for t in history if now - t < 300]  # 5-min rolling window
+    if len(history) >= 3:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many OTP requests. Please wait 5 minutes before trying again."
+        )
+    history.append(now)
+    USER_OTP_LIMITER[phone] = history
+
+
+@app.get("/user/login", response_class=HTMLResponse)
+async def user_login_page(request: Request, next: str = "/"):
+    """Serve the user OTP login page. Redirect to 'next' if already logged in."""
+    if request.session.get("user_id"):
+        return RedirectResponse(url=next)
+    return templates.TemplateResponse(request=request, name="user_login.html", context={
+        "widget_id": os.environ.get("MSG91_WIDGET_ID", ""),
+        "widget_token": os.environ.get("MSG91_WIDGET_TOKEN", ""),
+        "next_url": next
+    })
+
+
+@app.get("/api/user/logout")
+async def user_logout(request: Request):
+    """Log out the current user and redirect to home."""
+    request.session.pop("user_id", None)
+    request.session.pop("user_phone", None)
+    return RedirectResponse(url="/")
+
+
+@app.post("/api/user/verify-widget-token")
+async def user_verify_widget_token(request: Request):
+    """Verify MSG91 Widget access_token and establish user session."""
+    try:
+        body = await request.json()
+        access_token = str(body.get("access_token", "")).strip()
+        phone_raw = str(body.get("phone", "")).strip()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid request body.")
+
+    if not access_token:
+        raise HTTPException(status_code=422, detail="Missing access token.")
+
+    phone = "".join(filter(str.isdigit, phone_raw))
+    msg91_auth_key = os.environ.get("MSG91_AUTH_KEY", "")
+
+    # Verify the widget access token with MSG91
+    try:
+        verify_res = await http_client.post(
+            "https://control.msg91.com/api/v5/widget/verifyAccessToken",
+            headers={"Content-Type": "application/json"},
+            json={"authkey": msg91_auth_key, "access_token": access_token},
+            timeout=10.0
+        )
+        print(f"MSG91 Widget Verify [{verify_res.status_code}]: {verify_res.text}")
+        result = verify_res.json()
+    except httpx.RequestError as e:
+        print(f"MSG91 Widget Verify Error: {str(e)}")
+        raise HTTPException(status_code=503, detail="Verification service unavailable.")
+
+    # Check verification result
+    if result.get("type") != "success":
+        err_msg = result.get("message", "Token verification failed.")
+        raise HTTPException(status_code=401, detail=f"Verification failed: {err_msg}")
+
+    # Extract phone from MSG91 response if not provided
+    verified_mobile = result.get("mobile", result.get("phone", ""))
+    if verified_mobile:
+        phone = "".join(filter(str.isdigit, str(verified_mobile)))[-10:]
+
+    if not phone or len(phone) != 10:
+        raise HTTPException(status_code=422, detail="Unable to determine phone number from verification.")
+
+    # Upsert user in Supabase
+    try:
+        check_res = await supabase_request("GET", f"users?phone=eq.{phone}&select=id,phone")
+        existing_users = check_res.json()
+        if existing_users:
+            user = existing_users[0]
+            now_iso = datetime.now(timezone.utc).isoformat()
+            await supabase_request("PATCH", f"users?id=eq.{user['id']}", data={"last_login": now_iso})
+            print(f"✅ Existing user logged in via Widget: {phone}")
+        else:
+            create_res = await supabase_request("POST", "users", data={"phone": phone})
+            user = create_res.json()[0]
+            print(f"✅ New user registered via Widget: {phone}")
+
+        request.session["user_id"] = user["id"]
+        request.session["user_phone"] = phone
+        return JSONResponse({"status": "success", "message": "Login successful.", "redirect": "/"})
+
+    except HTTPException as e:
+        raise HTTPException(status_code=500, detail="Account setup failed. Please try again.")
+
+
+@app.post("/api/user/send-otp")
+async def user_send_otp(request: Request):
+    try:
+        body = await request.json()
+        phone_raw = body.get("phone", "")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid request body.")
+
+    # Validate 10-digit phone
+    phone = "".join(filter(str.isdigit, phone_raw))[-10:]
+    if len(phone) != 10:
+        raise HTTPException(status_code=422, detail="Invalid 10-digit phone number.")
+
+    # Rate limit check
+    _check_otp_rate_limit(phone)
+
+    dev_mode = os.environ.get("OTP_DEV_MODE", "false").lower() == "true"
+    
+    if dev_mode:
+        import random
+        otp = str(random.randint(1000, 9999))
+        expiry = datetime.now(timezone.utc).timestamp() + 300
+        DEV_OTP_STORE[phone] = {"otp": otp, "expires_at": expiry}
+        
+        print("\n" + "="*50)
+        print(f"🔑 DEV MODE OTP for +91{phone}: {otp}")
+        print("="*50 + "\n")
+        
+        return JSONResponse({"status": "success", "message": "OTP generated (Dev Mode)."})
+
+    # ── PRODUCTION: Send via MSG91 v5 OTP API ─────────────────────────────
+    msg91_auth_key = os.environ.get("MSG91_AUTH_KEY", "")
+    msg91_template_id = os.environ.get("MSG91_TEMPLATE_ID", "")
+    
+    if not msg91_auth_key or msg91_auth_key == "YOUR_MSG91_AUTH_KEY_HERE":
+        raise HTTPException(status_code=503, detail="OTP service not configured.")
+
+    try:
+        params = {
+            "template_id": msg91_template_id,
+            "mobile": f"91{phone}",
+            "authkey": msg91_auth_key,
+        }
+        res = await http_client.get("https://api.msg91.com/api/v5/otp", params=params, timeout=10.0)
+        result = res.json()
+        
+        if result.get("type") == "success":
+            print(f"✅ OTP sent successfully via MSG91 to {phone}")
+            return JSONResponse({"status": "success", "message": "OTP sent successfully."})
+        else:
+            print(f"❌ MSG91 Send OTP Error: {result.get('message')}")
+            raise HTTPException(status_code=502, detail=f"Failed to send OTP: {result.get('message')}")
+            
+    except Exception as e:
+        print(f"❌ Connection error sending OTP: {str(e)}")
+        raise HTTPException(status_code=503, detail="OTP service currently unavailable.")
+
+
+@app.post("/api/user/verify-otp")
+async def user_verify_otp(request: Request):
+    try:
+        body = await request.json()
+        phone_raw = body.get("phone", "")
+        otp = str(body.get("otp", "")).strip()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid request body.")
+
+    # Validate inputs
+    phone = "".join(filter(str.isdigit, phone_raw))[-10:]
+    # Support redirection after login (Capture early for use in all branches)
+    next_url = body.get("next", "/")
+
+    # ── HARDCODED TEST ACCOUNTS (Always work, bypasses MSG91) ─────────────
+    TEST_ACCOUNTS = {
+        "9597482995": "1234",
+        "7418562267": "5678",
+        "6381279316": "9012"
+    }
+    
+    if phone in TEST_ACCOUNTS and TEST_ACCOUNTS[phone] == otp:
+        print(f"🔐 TEST ACCOUNT BYPASS: {phone} logged in with {otp}")
+        check_res = await supabase_request("GET", f"users?phone=eq.{phone}&select=id,phone")
+        existing_users = check_res.json()
+        if existing_users:
+            user = existing_users[0]
+            await supabase_request("PATCH", f"users?id=eq.{user['id']}", data={"last_login": datetime.now(timezone.utc).isoformat()})
+        else:
+            create_res = await supabase_request("POST", "users", data={"phone": phone})
+            user = create_res.json()[0]
+
+        request.session["user_id"] = user["id"]
+        request.session["user_phone"] = phone
+        return JSONResponse({"status": "success", "message": "Login successful (Test Bypass).", "redirect": "/user/dashboard"})
+
+    dev_mode = os.environ.get("OTP_DEV_MODE", "false").lower() == "true"
+    
+    # ── DEV MODE: Verify from in-memory store ─────────────────────────────
+    if dev_mode:
+        now = datetime.now(timezone.utc).timestamp()
+        stored = DEV_OTP_STORE.get(phone)
+        if not stored or stored["otp"] != otp:
+             raise HTTPException(status_code=401, detail="Invalid OTP. Please try again.")
+        if now > stored["expires_at"]:
+            DEV_OTP_STORE.pop(phone, None)
+            raise HTTPException(status_code=401, detail="OTP expired. Request a new one.")
+        
+        DEV_OTP_STORE.pop(phone, None)
+        print(f"✅ DEV MODE: OTP verified for {phone}")
+        
+        check_res = await supabase_request("GET", f"users?phone=eq.{phone}&select=id,phone")
+        existing_users = check_res.json()
+        if existing_users:
+            user = existing_users[0]
+            await supabase_request("PATCH", f"users?id=eq.{user['id']}", data={"last_login": datetime.now(timezone.utc).isoformat()})
+        else:
+            create_res = await supabase_request("POST", "users", data={"phone": phone})
+            user = create_res.json()[0]
+
+        request.session["user_id"] = user["id"]
+        request.session["user_phone"] = phone
+        return JSONResponse({"status": "success", "message": "Login successful (Dev Mode).", "redirect": next_url})
+
+    # ── PRODUCTION: Verify via MSG91 v5 API ───────────────────────────────
+    msg91_auth_key = os.environ.get("MSG91_AUTH_KEY", "")
+    try:
+        params = {
+            "authkey": msg91_auth_key,
+            "mobile": f"91{phone}",
+            "otp": otp
+        }
+        res = await http_client.get("https://api.msg91.com/api/v5/otp/verify", params=params, timeout=10.0)
+        result = res.json()
+        
+        if result.get("type") != "success":
+            print(f"❌ OTP Verify Error: {result.get('message')}")
+            raise HTTPException(status_code=401, detail=result.get("message", "Invalid or expired OTP."))
+
+        check_res = await supabase_request("GET", f"users?phone=eq.{phone}&select=id,phone")
+        existing_users = check_res.json()
+
+        if existing_users:
+            user = existing_users[0]
+            await supabase_request("PATCH", f"users?id=eq.{user['id']}", data={"last_login": datetime.now(timezone.utc).isoformat()})
+            print(f"✅ Existing user logged in via real OTP: {phone}")
+        else:
+            create_res = await supabase_request("POST", "users", data={"phone": phone})
+            user = create_res.json()[0]
+            print(f"✅ New user registered via real OTP: {phone}")
+
+        request.session["user_id"] = user["id"]
+        request.session["user_phone"] = phone
+        return JSONResponse({"status": "success", "message": "Login successful.", "redirect": next_url})
+
+    except Exception as e:
+        if isinstance(e, HTTPException): raise e
+        print(f"❌ Unexpected verification error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Authentication failed. Please try again.")
+
+    finally:
+        pass # End of function logic
+
+
+# Basic in-memory rate limiter (worker status updates)
 RE_LIMITER = {}
+
 
 @app.put("/api/worker/status")
 async def update_worker_status(request: Request):
@@ -570,7 +1286,392 @@ async def get_worker_status(worker_id: str, request: Request):
     if workers:
         return {"status": "success", "worker": workers[0]}
     return JSONResponse({"status": "error", "message": "Worker not found."}, status_code=404)
-    
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  COMMUNITY AMBASSADOR SYSTEM
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── Password helpers (SHA-256 — clean hex, no encoding issues) ──────────────
+def _amb_hash(password: str) -> str:
+    """Return SHA-256 hex digest of password (simple, reliable, no binary encoding issues)."""
+    return hashlib.sha256(password.strip().encode("utf-8")).hexdigest()
+
+def _amb_verify(password: str, stored: str) -> bool:
+    """Verify ambassador password against stored hash (SHA-256 or bcrypt legacy)."""
+    if not stored:
+        return False
+    # SHA-256 hashes are exactly 64 hex chars
+    if len(stored) == 64:
+        return secrets.compare_digest(_amb_hash(password), stored)
+    # Fallback: bcrypt (for any legacy records)
+    try:
+        return bcrypt.checkpw(password.encode("utf-8"), stored.encode("utf-8"))
+    except Exception:
+        return False
+
+# ── Special headers that bypass RLS (service_role key already set globally) ──
+def _admin_headers():
+    """Return Supabase headers with explicit service-role bypass and representation."""
+    return {
+        "apikey":         SUPABASE_KEY,
+        "Authorization":  f"Bearer {SUPABASE_KEY}",
+        "Content-Type":   "application/json",
+        "Prefer":         "return=representation",
+        "X-Client-Info":  "nearva-admin/1.0",
+    }
+
+async def _supabase_admin_patch(endpoint: str, data: dict):
+    """PATCH using service-role headers that bypass all RLS."""
+    url = f"{SUPABASE_URL}/rest/v1/{endpoint}"
+    resp = await http_client.request("PATCH", url, headers=_admin_headers(), json=data)
+    print(f"[ADMIN PATCH] {endpoint} → {resp.status_code} | {resp.text[:200]}")
+    return resp
+
+async def _supabase_admin_post(endpoint: str, data: dict):
+    """POST using service-role headers that bypass all RLS."""
+    url = f"{SUPABASE_URL}/rest/v1/{endpoint}"
+    resp = await http_client.request("POST", url, headers=_admin_headers(), json=data)
+    print(f"[ADMIN POST] {endpoint} → {resp.status_code} | {resp.text[:200]}")
+    return resp
+
+
+@app.get("/ambassador/login", response_class=HTMLResponse)
+async def ambassador_login_page(request: Request):
+    if request.session.get("ambassador_id"):
+        return RedirectResponse(url="/ambassador/dashboard")
+    return templates.TemplateResponse(request=request, name="ambassador_login.html")
+
+@app.post("/ambassador/login")
+async def ambassador_login(
+    request: Request,
+    phone: str = Form(...),
+    password: str = Form(...)
+):
+    phone_clean = phone.strip().replace(" ", "")
+    print(f"[AMB LOGIN] phone='{phone_clean}'")
+
+    resp = await supabase_request("GET",
+        f"ambassadors?phone=eq.{phone_clean}&select=id,name,phone,area,password_hash,status")
+    records = resp.json()
+    print(f"[AMB LOGIN] records found: {len(records)}")
+
+    if not records:
+        return templates.TemplateResponse(request=request, name="ambassador_login.html",
+            context={"error": "No account found for this phone number."})
+
+    amb = records[0]
+    stored = amb.get("password_hash") or ""
+    print(f"[AMB LOGIN] name={amb.get('name')} status={amb.get('status')} hash_len={len(stored)}")
+
+    if amb.get("status") != "active":
+        return templates.TemplateResponse(request=request, name="ambassador_login.html",
+            context={"error": "Your account is deactivated. Contact Admin."})
+
+    if not stored:
+        return templates.TemplateResponse(request=request, name="ambassador_login.html",
+            context={"error": "Password not set. Admin must open 'Add Ambassador' and re-enter your phone + new password."})
+
+    if not _amb_verify(password, stored):
+        return templates.TemplateResponse(request=request, name="ambassador_login.html",
+            context={"error": "Incorrect password. Please try again."})
+
+    request.session["ambassador_id"]    = amb["id"]
+    request.session["ambassador_name"]  = amb["name"]
+    request.session["ambassador_area"]  = amb["area"]
+    request.session["ambassador_phone"] = amb["phone"]
+    return RedirectResponse(url="/ambassador/dashboard", status_code=302)
+
+
+@app.get("/ambassador/dashboard", response_class=HTMLResponse)
+async def ambassador_dashboard(request: Request):
+    ambassador_id = request.session.get("ambassador_id")
+    if not ambassador_id:
+        return RedirectResponse(url="/ambassador/login")
+    return templates.TemplateResponse(request=request, name="ambassador_dashboard.html", context={
+        "ambassador_name":  request.session.get("ambassador_name", "Ambassador"),
+        "ambassador_area":  request.session.get("ambassador_area", "Your Area"),
+        "ambassador_phone": request.session.get("ambassador_phone", ""),
+        "ambassador_id":    ambassador_id,
+    })
+
+@app.get("/api/ambassador/logout")
+async def ambassador_logout(request: Request):
+    for k in ("ambassador_id", "ambassador_name", "ambassador_area", "ambassador_phone"):
+        request.session.pop(k, None)
+    return RedirectResponse(url="/ambassador/login")
+
+@app.get("/api/ambassador/workers")
+async def ambassador_get_workers(request: Request):
+    ambassador_id = request.session.get("ambassador_id")
+    if not ambassador_id:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    resp = await supabase_request("GET",
+        f"workers?ambassador_id=eq.{ambassador_id}&select=id,name,phone,service,area,account_status,profile_photo,created_at&order=created_at.desc")
+    workers = resp.json() if resp.is_success else []
+    return JSONResponse({"status": "success", "workers": workers})
+
+@app.get("/api/ambassador/stats")
+async def ambassador_get_stats(request: Request):
+    ambassador_id = request.session.get("ambassador_id")
+    if not ambassador_id:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    resp = await supabase_request("GET",
+        f"workers?ambassador_id=eq.{ambassador_id}&select=account_status")
+    workers = resp.json() if resp.is_success else []
+    total    = len(workers)
+    approved = sum(1 for w in workers if w.get("account_status") == "Approved")
+    pending  = sum(1 for w in workers if w.get("account_status") == "Pending")
+    rejected = sum(1 for w in workers if w.get("account_status") == "Rejected")
+    return JSONResponse({
+        "status": "success",
+        "total_workers":    total,
+        "approved_workers": approved,
+        "pending_workers":  pending,
+        "rejected_workers": rejected
+    })
+
+async def _ambassador_set_status(worker_id: str, new_status: str, request: Request):
+    """Shared helper for ambassador approve/reject. Returns JSONResponse."""
+    ambassador_id = request.session.get("ambassador_id")
+    if not ambassador_id:
+        return JSONResponse({"status": "error", "message": "Unauthorized"}, status_code=401)
+
+    # Primary check: worker must be linked to this ambassador via FK
+    check = await supabase_request("GET",
+        f"workers?id=eq.{worker_id}&ambassador_id=eq.{ambassador_id}&select=id,name")
+    worker_rows = check.json() if check.is_success else []
+
+    # Fallback check: worker ID exists at all (for pre-migration workers that lack ambassador_id)
+    if not worker_rows:
+        fallback = await supabase_request("GET", f"workers?id=eq.{worker_id}&select=id,name,ambassador_id")
+        fb_rows = fallback.json() if fallback.is_success else []
+        if fb_rows:
+            existing_amb = fb_rows[0].get("ambassador_id")
+            if existing_amb and existing_amb != ambassador_id:
+                print(f"[AMB ACTION] DENIED: worker {worker_id} belongs to different ambassador {existing_amb}")
+                return JSONResponse({"status": "error", "message": "This worker is not assigned to you"}, status_code=403)
+            # Worker exists but has no ambassador_id (pre-migration) — claim + update
+            print(f"[AMB ACTION] Pre-migration worker {worker_id} — linking to ambassador {ambassador_id}")
+            await supabase_request("PATCH", f"workers?id=eq.{worker_id}",
+                data={"ambassador_id": ambassador_id})
+        else:
+            return JSONResponse({"status": "error", "message": "Worker not found"}, status_code=404)
+
+    result = await supabase_request("PATCH", f"workers?id=eq.{worker_id}",
+        data={"account_status": new_status})
+
+    if not result.is_success:
+        print(f"[AMB ACTION] DB PATCH failed for worker {worker_id}: {result.status_code} {result.text[:80]}")
+        return JSONResponse({"status": "error", "message": "Database update failed"}, status_code=500)
+
+    print(f"[AMB ACTION] Worker {worker_id} → {new_status} by ambassador {ambassador_id}")
+    return JSONResponse({"status": "success", "account_status": new_status})
+
+@app.post("/api/ambassador/approve/{worker_id}")
+async def ambassador_approve_worker(worker_id: str, request: Request):
+    return await _ambassador_set_status(worker_id, "Approved", request)
+
+@app.post("/api/ambassador/reject/{worker_id}")
+async def ambassador_reject_worker(worker_id: str, request: Request):
+    return await _ambassador_set_status(worker_id, "Rejected", request)
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  ADMIN – AMBASSADOR MANAGEMENT APIS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/admin/ambassadorsList")
+async def admin_list_ambassadors(request: Request):
+    if not request.session.get("admin_logged_in"):
+        return JSONResponse({"status": "error"}, status_code=401)
+        
+    try:
+        # Step 1: Fetch all ambassadors
+        amb_resp = await supabase_request("GET",
+            "ambassadors?select=id,name,phone,area,status,referral_code,created_at&order=created_at.desc")
+        
+        ambassadors = amb_resp.json() if amb_resp.is_success else []
+    except Exception as e:
+        print(f"[ADMIN] Failed to load ambassadors: {e}")
+        return JSONResponse({"error": "Failed to load ambassadors. Please check DB migrations and RLS."}, status_code=500)
+
+    # Step 2: Fetch worker counts per ambassador (safe separate query)
+    if ambassadors:
+        try:
+            counts_resp = await supabase_request("GET",
+                "workers?select=ambassador_id&ambassador_id=not.is.null")
+            if counts_resp.is_success:
+                workers_raw = counts_resp.json()
+                count_map = {}
+                for w in workers_raw:
+                    aid = w.get("ambassador_id")
+                    if aid:
+                        count_map[aid] = count_map.get(aid, 0) + 1
+                # Inject worker_count into each ambassador record
+                for amb in ambassadors:
+                    amb["worker_count"] = count_map.get(amb["id"], 0)
+        except Exception as e:
+            print(f"[ADMIN] Worker counts query failed (likely PostgREST schema cache delay): {str(e)[:100]}")
+            # Silently degrade: set counts to 0 so the table still loads
+            for amb in ambassadors:
+                amb["worker_count"] = 0
+
+    return JSONResponse(ambassadors)
+
+@app.post("/api/admin/ambassadors")
+async def admin_create_ambassador(
+    request: Request,
+    name: str = Form(...),
+    phone: str = Form(...),
+    area: str = Form(...),
+    password: str = Form(...)
+):
+    """Create or update an ambassador account using SHA-256 hashing."""
+    phone = phone.strip().replace(" ", "")
+    hashed = _amb_hash(password)   # clean 64-char hex — guaranteed to save to TEXT column
+    print(f"[AMB CREATE] phone={phone} hash={hashed[:12]}...")
+
+    # Check existing
+    existing = await supabase_request("GET", f"ambassadors?phone=eq.{phone}&select=id,name")
+    existing_list = existing.json()
+
+    if existing_list:
+        print(f"[AMB CREATE] Updating existing: {existing_list[0].get('name')}")
+        patch = await _supabase_admin_patch(f"ambassadors?phone=eq.{phone}", {
+            "name":          name.strip(),
+            "area":          area.strip(),
+            "password_hash": hashed,
+            "status":        "active",
+        })
+        if patch.status_code in (200, 201, 204):
+            patch_data = patch.json() if patch.status_code != 204 else []
+            if patch_data:
+                return JSONResponse({"status": "success", "message": "Ambassador password updated. They can now login."})
+            else:
+                print(f"[AMB CREATE] RLS silent failure? Patch returned empty for {phone}")
+                return JSONResponse({"status": "error", "message": "Update failed (Check RLS write permissions). Please use SQL editor to update."})
+        return JSONResponse({"status": "error", "message": f"DB update failed: {patch.text[:100]}"})
+
+    # New ambassador
+    import secrets
+    ref_code = f"NEARVA-{phone[-4:]}-{secrets.token_hex(2).upper()}" 
+    post = await _supabase_admin_post("ambassadors", {
+        "name":          name.strip(),
+        "phone":         phone,
+        "area":          area.strip(),
+        "referral_code": ref_code,
+        "password_hash": hashed,
+        "status":        "active",
+    })
+    if post.status_code in (200, 201):
+        post_data = post.json() if post.status_code != 204 else []
+        if post_data:
+            return JSONResponse({"status": "success", "message": f"Ambassador created with code: {ref_code}"})
+        else:
+            print(f"[AMB CREATE] RLS silent failure? Post returned empty for {phone}")
+            return JSONResponse({"status": "error", "message": "Create failed (Check RLS write permissions). Please use SQL editor."})
+    return JSONResponse({"status": "error", "message": f"DB create failed: {post.text[:100]}"})
+
+@app.post("/api/admin/ambassadors/{amb_id}/toggle")
+async def admin_toggle_ambassador(amb_id: str, request: Request):
+    resp = await supabase_request("GET", f"ambassadors?id=eq.{amb_id}&select=status")
+    rows = resp.json()
+    if not rows:
+        return JSONResponse({"status": "error", "message": "Ambassador not found"}, status_code=404)
+    new_status = "inactive" if rows[0]["status"] == "active" else "active"
+    await supabase_request("PATCH", f"ambassadors?id=eq.{amb_id}", data={"status": new_status})
+    return JSONResponse({"status": "success", "new_status": new_status})
+
+@app.delete("/api/admin/ambassadors/{amb_id}")
+async def admin_delete_ambassador(amb_id: str, request: Request):
+    resp = await supabase_request("GET", f"ambassadors?id=eq.{amb_id}&select=id")
+    if not resp.json():
+        return JSONResponse({"status": "error", "message": "Ambassador not found"}, status_code=404)
+    await supabase_request("DELETE", f"ambassadors?id=eq.{amb_id}")
+    return JSONResponse({"status": "success"})
+
+
+# Simple in-memory caching for optimization
+_API_CACHE = {}
+
+def _get_cache(key: str, ttl: int = 60):
+    val = _API_CACHE.get(key)
+    if val and (time.time() - val['time']) < ttl:
+        return val['data']
+    return None
+
+def _set_cache(key: str, data):
+    _API_CACHE[key] = {'time': time.time(), 'data': data}
+
+
+# ── Public: Ambassador list (used by register page dropdown) ────────────────
+@app.get("/api/ambassadors")
+async def public_ambassadors_list():
+    """Return all ACTIVE ambassadors with caching for instant load."""
+    cached = _get_cache("public_ambassadors", ttl=300) # 5 minutes cache
+    if cached: return JSONResponse(cached)
+
+    resp = await supabase_request(
+        "GET",
+        "ambassadors?status=eq.active&select=id,name,area,phone&order=name.asc"
+    )
+    data = resp.json()
+    _set_cache("public_ambassadors", data)
+    return JSONResponse(data)
+
+@app.get("/api/admin/analytics")
+async def admin_analytics(request: Request):
+    """Real-time platform analytics with short debounce caching."""
+    cached = _get_cache("admin_analytics", ttl=15) # 15 seconds cache to avoid jitter
+    if cached: return JSONResponse(cached)
+
+    try:
+        # Fetch counts in parallel-ish (sequential due to async constraints)
+        workers_resp  = await supabase_request("GET", "workers?select=id,account_status,is_online")
+        users_resp    = await supabase_request("GET", "users?select=id")
+        amb_resp      = await supabase_request("GET", "ambassadors?select=id,status")
+
+        workers  = workers_resp.json()
+        users    = users_resp.json()
+        ambs     = amb_resp.json()
+
+        total_workers    = len(workers)
+        approved_workers = len([w for w in workers if w.get("account_status") == "Approved"])
+        online_workers   = len([w for w in workers if w.get("is_online")])
+        total_users      = len(users)
+        total_ambassadors = len(ambs)
+        active_ambassadors = len([a for a in ambs if a.get("status") == "active"])
+
+        try:
+            jobs_resp  = await supabase_request("GET", "job_requests?select=id,status")
+            jobs       = jobs_resp.json()
+            active_jobs = len([j for j in jobs if j.get("status") in ("accepted", "in_progress")])
+            total_jobs  = len(jobs)
+        except:
+            active_jobs = 0
+            total_jobs  = 0
+
+        data = {
+            "total_users": total_users,
+            "total_workers": total_workers,
+            "approved_workers": approved_workers,
+            "online_workers": online_workers,
+            "active_jobs": active_jobs,
+            "total_jobs": total_jobs,
+            "total_ambassadors": total_ambassadors,
+            "active_ambassadors": active_ambassadors,
+        }
+        _set_cache("admin_analytics", data)
+        return JSONResponse(data)
+    except Exception as e:
+        print(f"Analytics error: {e}")
+        return JSONResponse({"total_users": 0, "total_workers": 0, "approved_workers": 0,
+                             "online_workers": 0, "active_jobs": 0, "total_jobs": 0,
+                             "total_ambassadors": 0, "active_ambassadors": 0})
+
+
 @app.get("/{city}/{service}", response_class=HTMLResponse)
 async def service_city_page(request: Request, city: str, service: str):
     return templates.TemplateResponse(
@@ -585,3 +1686,4 @@ async def service_city_page(request: Request, city: str, service: str):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+

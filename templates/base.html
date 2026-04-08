@@ -42,89 +42,82 @@
     }
   </style>
   {% block head %}{% endblock %}
-  <script src="{{ url_for('static', path='js/categories.js') }}"></script>
+  <script src="{{ url_for('static', path='js/categories.js') }}?v=2"></script>
 </head>
 
-<body class="bg-gray-50 flex flex-col min-h-screen">
+<body class="flex flex-col min-h-screen bg-slate-50 text-slate-900"
+  data-logged-in="{{ 'true' if request.session.user_id else 'false' }}"
+  data-dark-nav="{{ 'true' if dark_nav else 'false' }}"
+  style="--nav-bg: {% if dark_nav %}rgba(15,23,42,0.9){% else %}rgba(255,255,255,1){% endif %}; 
+         --nav-border: {% if dark_nav %}rgba(255,255,255,0.1){% else %}rgba(0,0,0,0.05){% endif %};
+         --nav-shadow: {% if dark_nav %}0 20px 40px rgba(0,0,0,0.5){% else %}0 20px 40px rgba(0,0,0,0.1){% endif %};">
   <!-- Global Toast Container -->
   <div id="toast-container"></div>
-  {% block header %}
-  <!-- Floating Navigation Bar -->
-  <header id="main-nav"
-    class="fixed top-6 left-1/2 -translate-x-1/2 w-[92%] max-w-7xl z-[100] transition-all duration-500 bg-white border border-gray-100 shadow-[0_8px_32px_rgba(0,0,0,0.08)] rounded-[28px] overflow-hidden">
-    <div class="px-6 py-3 md:px-8 md:py-4">
-      <div class="flex justify-between items-center">
-        <div class="flex items-center gap-2">
-          <a href="/" class="flex items-center group">
-            <img src="{{ url_for('static', path='images/nearva_logo.png') }}"
-              class="h-12 md:h-16 w-auto mix-blend-multiply transition-transform group-hover:scale-105 object-contain gpu-accelerated"
-              alt="Nearva Logo">
-          </a>
-        </div>
-
-        <div class="flex items-center gap-4 md:gap-8">
-          <button onclick="toggleLanguage()"
-            class="text-[11px] md:text-sm font-bold text-gray-500 hover:text-blue-600 transition-colors uppercase tracking-widest whitespace-nowrap">
-            <span id="lang-display">EN | தமிழ்</span>
-          </button>
-
-          <div class="hidden md:flex items-center gap-8">
-            <a href="/worker/login" class="text-sm font-bold text-gray-600 hover:text-blue-600 transition-all active:scale-95"
-              data-en="Worker Login" data-ta="பணியாளர் உள்நுழைவு">Worker Login</a>
-            <a href="/register"
-              class="px-8 py-3 rounded-full bg-blue-600 text-white text-sm font-black hover:bg-blue-700 hover:shadow-xl hover:shadow-blue-600/30 active:scale-95 transition-all duration-300 ease-out"
-              data-en="Join as Worker" data-ta="பணியாளராக சேரவும்">Join as Worker</a>
-          </div>
-
-          <a href="/worker/login" class="md:hidden p-2 text-gray-500">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-              stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-            </svg>
-          </a>
-        </div>
-      </div>
-    </div>
-  </header>
-  {% endblock %}
+  {% block header %}{% endblock %}
 
   {% block mobile_nav %}
-  <!-- Mobile Bottom Navigation -->
-  <div
-    class="md:hidden fixed bottom-0 w-full z-[100] bg-white/90 backdrop-blur-xl border-t border-gray-100 flex justify-around items-center py-2 pb-safe shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
-    <a href="/" class="flex flex-col items-center p-2 text-blue-600 active:scale-90 transition-all">
-      <svg class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-        <path stroke-linecap="round" stroke-linejoin="round"
-          d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-      </svg>
-      <span class="text-[10px] font-bold">Home</span>
-    </a>
-    <a href="/map" class="flex flex-col items-center p-2 text-gray-400 hover:text-blue-600 active:scale-90 transition-all">
-      <svg class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round"
-          d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 7m0 13V7" />
-      </svg>
-      <span class="text-[10px] font-medium">Map</span>
-    </a>
-    <a href="/register" class="flex flex-col items-center relative group active:scale-90 transition-all">
-      <div
-        class="absolute -top-8 bg-blue-600 text-white rounded-full p-3 shadow-xl hover:scale-110 active:scale-95 transition-all border-4 border-white">
-        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+  <!-- Modern Unified Bottom Navigation -->
+  <nav
+    class="md:hidden fixed bottom-0 left-0 w-full z-[200] pb-safe bg-white/95 backdrop-blur-2xl border-t border-slate-200 shadow-[0_-8px_30px_rgba(0,0,0,0.06)]"
+    style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom));">
+    <div class="grid grid-cols-5 items-center max-w-lg mx-auto relative px-2 h-16">
+      
+      <!-- Home -->
+      <a href="/" class="flex flex-col items-center justify-center gap-1 transition-all duration-300 active:scale-75 {{ 'text-blue-600' if request.url.path == '/' else 'text-slate-500 opacity-80' }}">
+        <svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
         </svg>
+        <span class="text-[10px] font-black uppercase tracking-widest">Home</span>
+      </a>
+      
+      <!-- Map -->
+      <a href="/map" class="flex flex-col items-center justify-center gap-1 transition-all active:scale-90 {{ 'text-blue-600' if request.url.path == '/map' else 'text-slate-400' }}">
+        <svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.1">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 7m0 13V7" />
+        </svg>
+        <span class="text-[10px] font-black uppercase tracking-widest">Map</span>
+      </a>
+ 
+      <!-- Floating Action Button (JOIN) -->
+      <div class="flex flex-col items-center justify-center h-full">
+        <a href="/register" class="flex flex-col items-center transition-all active:scale-95" style="transform: translateY(-28px);">
+          <div class="bg-blue-600 text-white rounded-full p-4 shadow-[0_12px_32px_rgba(37,99,235,0.4)] border-[6px] border-white transition-transform duration-300">
+            <svg class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+          </div>
+          <span class="text-[10px] font-black mt-1 text-blue-600 uppercase tracking-widest">Join</span>
+        </a>
       </div>
-      <div class="h-6 w-6 mb-1"></div>
-      <span class="text-[10px] font-medium mt-1 text-gray-500">Join</span>
-    </a>
-    <a href="/worker/login" class="flex flex-col items-center p-2 text-gray-400 hover:text-blue-600 active:scale-90 transition-all">
-      <svg class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-        <path stroke-linecap="round" stroke-linejoin="round"
-          d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-      </svg>
-      <span class="text-[10px] font-medium">Login</span>
-    </a>
-  </div>
+ 
+      <!-- Dashboard/Login -->
+      <a href="/user/dashboard" class="flex flex-col items-center justify-center gap-1 transition-all duration-300 active:scale-75 {{ 'text-blue-600' if 'dashboard' in request.url.path else 'text-slate-500 opacity-80' }}">
+        {% if request.session.user_id %}
+        <div class="relative">
+          <svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+          <!-- Notification Badge -->
+          <div id="global-unread-badge" class="hidden absolute -top-1 -right-1 w-4 h-4 bg-red-500 border-2 border-white rounded-full items-center justify-center animate-bounce-subtle"></div>
+        </div>
+        <span class="text-[10px] font-black uppercase tracking-widest">Dash</span>
+        {% else %}
+        <svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+        </svg>
+        <span class="text-[10px] font-black uppercase tracking-widest">Login</span>
+        {% endif %}
+      </a>
+      <!-- About -->
+      <a href="/about" class="flex flex-col items-center justify-center gap-1 transition-all active:scale-90 {{ 'text-blue-600' if request.url.path == '/about' else 'text-slate-400' }}">
+        <svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span class="text-[10px] font-black uppercase tracking-widest">About</span>
+      </a>
+
+    </div>
+  </nav>
   {% endblock %}
 
   <main class="flex-grow">
@@ -133,25 +126,25 @@
 
   {% block footer %}
   <!-- Unified Footer -->
-  <footer class="bg-white border-t border-gray-100 pt-16 pb-24 md:pb-12">
+  <footer class="border-t pt-16 pb-24 md:pb-12 {% if dark_nav %} bg-[#0a0a0f] border-white/5 {% else %} bg-white border-gray-100 {% endif %}">
     <div class="max-w-7xl mx-auto px-6 text-center">
       <img src="{{ url_for('static', path='images/nearva_logo.png') }}"
-        class="h-12 w-auto mx-auto mb-8 mix-blend-multiply opacity-50 grayscale hover:grayscale-0 transition-all duration-500"
+        class="h-14 w-auto mx-auto mb-8 grayscale hover:grayscale-0 transition-all duration-500 {% if dark_nav %} brightness-125 {% endif %}"
         alt="Nearva Logo">
-
-      <div class="flex flex-wrap justify-center gap-x-8 gap-y-4 mb-10 text-sm font-semibold text-gray-500">
-        <a href="/about" class="hover:text-blue-600 transition">About</a>
-        <a href="/contact" class="hover:text-blue-600 transition">Contact</a>
-        <a href="/privacy" class="hover:text-blue-600 transition">Privacy Policy</a>
-        <a href="/terms" class="hover:text-blue-600 transition">Terms of Service</a>
+ 
+      <div class="flex flex-wrap justify-center gap-x-8 gap-y-4 mb-10 text-sm font-bold text-slate-500">
+        <a href="/about" class="hover:text-blue-400 transition">About</a>
+        <a href="/contact" class="hover:text-blue-400 transition">Contact</a>
+        <a href="/privacy" class="hover:text-blue-400 transition">Privacy Policy</a>
+        <a href="/terms" class="hover:text-blue-400 transition">Terms of Service</a>
       </div>
-
-      <p class="text-xs text-gray-400 max-w-md mx-auto leading-relaxed mb-6 font-medium">
+ 
+      <p class="text-xs text-slate-600 max-w-md mx-auto leading-relaxed mb-6 font-medium">
         Nearva is a verified hyperlocal network connecting neighborhoods with professional service providers instantly.
       </p>
-
-      <div class="flex items-center justify-center gap-4 pt-6 border-t border-gray-50">
-        <p class="text-[10px] font-bold text-gray-300 uppercase tracking-widest leading-loose">
+ 
+      <div class="flex items-center justify-center gap-4 pt-6 border-t border-white/5">
+        <p class="text-[10px] font-bold text-slate-700 uppercase tracking-widest leading-loose">
           &copy; 2026 Nearva Hyperlocal.<br />All professional rights reserved.
         </p>
       </div>
@@ -161,6 +154,7 @@
 
   <!-- Global Language Logic -->
   <script>
+    const IS_USER_LOGGED_IN = document.body.dataset.loggedIn === 'true';
     let currentLang = localStorage.getItem('nearva_lang') || 'en';
     document.addEventListener('DOMContentLoaded', () => { updatePageLanguage(); });
 
@@ -185,6 +179,36 @@
       document.body.classList.toggle('tamil-mode', currentLang === 'ta');
     }
 
+    // ── UNIVERSAL API & ERROR HANDLING ───────────────────────────
+    /**
+     * unified apiCall wrapper for Fetch
+     * Usage: const data = await apiCall('/api/...', { method: 'POST' });
+     */
+    window.apiCall = async function(url, options = {}, successMsg = null) {
+      try {
+        const response = await fetch(url, {
+          ...options,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(options.headers || {})
+          }
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || data.detail || `Error: ${response.status}`);
+        }
+
+        if (successMsg) showToast(successMsg, 'success');
+        return data;
+      } catch (err) {
+        console.error(`[API ERROR] ${url}:`, err);
+        showToast(err.message || 'Connection lost. Please try again.', 'error');
+        throw err;
+      }
+    };
+
     // Global Notification System
     function showToast(message, type = 'success') {
       const container = document.getElementById('toast-container');
@@ -195,36 +219,90 @@
       const isError = type === 'error' || type === 'danger';
       
       let bg = 'bg-white border-gray-100';
-      let textColor = 'text-gray-900';
-      let shadow = 'shadow-[0_12px_40px_rgba(0,0,0,0.08)]';
+      let textColor = 'text-gray-900 shadow-xl shadow-black/5';
       let icon = '✨';
 
       if (isSuccess) {
         bg = 'bg-white border-green-100';
         icon = '✅';
       } else if (isError) {
-        bg = 'bg-red-600 border-red-500';
-        textColor = 'text-white';
-        shadow = 'shadow-[0_12px_40px_rgba(220,38,38,0.2)]';
+        bg = 'bg-[#ef4444] border-[#dc2626]';
+        textColor = 'text-white shadow-xl shadow-red-500/20';
         icon = '⚠️';
       }
 
-      toast.className = `toast px-6 py-4 rounded-[20px] border ${bg} ${textColor} ${shadow} flex items-center gap-3 font-bold text-[13px] pointer-events-auto backdrop-blur-xl transition-all duration-400`;
+      toast.className = `toast px-6 py-4 rounded-[22px] border ${bg} ${textColor} flex items-center gap-3 font-bold text-[13px] pointer-events-auto backdrop-blur-xl transition-all duration-400 transform scale-95 opacity-0`;
       toast.innerHTML = `
           <span class="text-base">${icon}</span>
-          <span>${message}</span>
+          <span class="leading-tight">${message}</span>
       `;
 
       container.appendChild(toast);
       
-      // Force Reflow
-      toast.offsetHeight;
-      toast.classList.add('toast-active');
+      // Animation entry
+      requestAnimationFrame(() => {
+        toast.classList.remove('scale-95', 'opacity-0');
+        toast.classList.add('scale-100', 'opacity-100');
+      });
 
       setTimeout(() => {
-        toast.classList.remove('toast-active');
-        setTimeout(() => toast.remove(), 500);
+        toast.classList.add('scale-95', 'opacity-0');
+        setTimeout(() => toast.remove(), 400);
       }, 4000);
+    }
+
+    // ── NAVIGATION & REAL-TIME UX ───────────────────────────
+    function handleNavBack() {
+      if (window.closeCurrentScreen) {
+        window.closeCurrentScreen();
+      } else {
+        window.history.back();
+      }
+    }
+
+    function updateBackButton() {
+      const container = document.getElementById('nav-back-container');
+      if (!container) return;
+      const path = window.location.pathname;
+      const isHome = path === '/' || path === '/index.html';
+      container.classList.toggle('hidden', isHome);
+    }
+    window.addEventListener('popstate', updateBackButton);
+    document.addEventListener('DOMContentLoaded', updateBackButton);
+
+    // Global Socket.IO for notifications
+    let globalSocket = null;
+    if (IS_USER_LOGGED_IN) {
+      const script = document.createElement('script');
+      script.src = "https://cdn.socket.io/4.7.2/socket.io.min.js";
+      script.onload = () => {
+        globalSocket = io({ transports: ['polling', 'websocket'] });
+        
+        // Use user_id from template if available, or fetch it
+        const currentUserId = "{{ request.session.user_id or request.session.worker_id }}";
+        if (currentUserId) {
+          globalSocket.emit('join', { user_id: currentUserId });
+          console.log("DEBUG: Global Socket joined room", currentUserId);
+        }
+
+        globalSocket.on('notify_message', (data) => {
+          updateUnreadBadge(true);
+          showToast(`New message from ${data.sender_name || 'Nearva'}`, 'success');
+        });
+      };
+      document.head.appendChild(script);
+    }
+
+    function updateUnreadBadge(show) {
+      const badge = document.getElementById('global-unread-badge');
+      if (badge) {
+        badge.classList.toggle('hidden', !show);
+        badge.classList.toggle('flex', show);
+        if (show) {
+          badge.classList.add('scale-125');
+          setTimeout(() => badge.classList.remove('scale-125'), 300);
+        }
+      }
     }
   </script>
   {% block scripts %}{% endblock %}

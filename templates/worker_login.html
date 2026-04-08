@@ -1,43 +1,67 @@
+{% set dark_nav = False %}
 {% extends 'base.html' %}
 
 {% block title %}Worker Login - Nearva{% endblock %}
 
 {% block head %}
 <style>
+    :root {
+        --bg-base: #0a0a0f;
+        --bg-card: #111119;
+        --bg-input: #1f2937;
+        --bg-elevated: #2d3748;
+        --border: #374151;
+        --accent: #3b82f6;
+        --text-primary: #ffffff;
+        --text-muted: #9ca3af;
+        --text-dim: #6b7280;
+    }
+
     .glass-panel {
-        background: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        background: rgba(22, 22, 31, 0.7);
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border: 1px solid var(--border);
+        box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.8);
     }
 
     .input-focus {
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        background: var(--bg-input) !important;
+        border: 1px solid var(--border) !important;
+        color: var(--text-primary) !important;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .input-focus:focus {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.2);
+        border-color: var(--accent) !important;
+        background: var(--bg-card) !important;
+        box-shadow: 0 0 20px rgba(59, 130, 246, 0.15), 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+        outline: none !important;
+    }
+
+    .input-focus::placeholder {
+        color: var(--text-muted) !important;
+        opacity: 0.8;
     }
 
     .premium-btn {
-        background: linear-gradient(to right, #2563EB, #4F46E5);
-        transition: all 0.3s ease;
+        background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+        transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
     .premium-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 15px 30px -5px rgba(37, 99, 235, 0.4);
+        transform: translateY(-2px) scale(1.02);
+        box-shadow: 0 20px 40px -10px rgba(99, 102, 241, 0.5);
     }
 
     .premium-btn:active {
-        transform: translateY(0);
+        transform: translateY(0) scale(0.98);
     }
 
     @keyframes fadeIn {
         from {
             opacity: 0;
-            transform: translateY(20px);
+            transform: translateY(30px);
         }
 
         to {
@@ -49,19 +73,22 @@
     .animate-fade-in {
         animation: fadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
+
+    .login-gradient {
+        background: radial-gradient(circle at top right, #1e1b4b 0%, #0a0a0f 60%);
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div
-    class="min-h-screen flex items-center justify-center p-4 pt-32 pb-20 bg-gradient-to-br from-[#667eea] to-[#764ba2]">
-    <div class="max-w-md w-full glass-panel rounded-[2.5rem] p-10 animate-fade-in">
+<div class="min-h-screen flex items-center justify-center p-4 pt-32 pb-20 login-gradient">
+    <div class="max-w-md w-full glass-panel rounded-[2.5rem] p-10 animate-fade-in relative overflow-hidden">
+        <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 to-purple-600"></div>
         <div class="text-center mb-10">
-            <h2 class="text-3xl font-extrabold text-gray-900 tracking-tight" data-en="Worker Portal"
-                data-ta="பணியாளர் போர்டல்">Worker Portal</h2>
-            <p class="mt-3 text-gray-500 font-medium" data-en="Welcome back! Manage your status and profile."
-                data-ta="மீண்டும் வருக! உங்கள் நிலை மற்றும் சுயவிவரத்தை நிர்வகிக்கவும்.">Welcome back! Manage your
-                status and profile.</p>
+            <h2 class="text-4xl font-black text-white tracking-tighter" data-en="Nearva" data-ta="பணியாளர்">Nearva
+            </h2>
+            <p class="mt-4 font-bold text-xs uppercase tracking-[0.2em] text-[#9ca3af]/80"
+                data-en="Worker Management Portal" data-ta="பணியாளர் மேலாண்மை">Worker Management Portal</p>
         </div>
 
         <form id="login-form" class="space-y-6">
@@ -79,7 +106,7 @@
                             </svg>
                         </span>
                         <input id="phone" name="phone" type="tel" required inputmode="numeric" pattern="[0-9]*"
-                            class="input-focus block w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-gray-900 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-inter"
+                            class="input-focus block w-full pl-12 pr-4 py-4 rounded-2xl font-bold transition-all font-inter"
                             placeholder="Enter mobile number" data-en="Enter mobile number"
                             data-ta="தொலைபேசி எண்ணை உள்ளிடவும்">
                     </div>
@@ -98,7 +125,7 @@
                             </svg>
                         </span>
                         <input id="password" name="password" type="password" required
-                            class="input-focus block w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-gray-900 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-inter"
+                            class="input-focus block w-full pl-12 pr-4 py-4 rounded-2xl font-bold transition-all font-inter"
                             placeholder="••••••••">
                     </div>
                 </div>
@@ -115,25 +142,26 @@
             </button>
 
             <div class="text-center pt-2">
-                <p class="text-sm text-gray-500 font-medium">
+                <p class="text-sm text-var(--text-muted) font-bold" style="color:var(--text-muted)">
                     <span data-en="New to Nearva?" data-ta="நியார்வாவிற்கு புதியவரா?">New to Nearva?</span>
-                    <a href="/register" class="text-blue-600 font-bold hover:text-blue-700 transition-colors ml-1"
-                        data-en="Become a Partner" data-ta="கூட்டாளராகுங்கள்">
-                        Become a Partner
+                    <a href="/register" class="text-indigo-400 font-black hover:text-white transition-colors ml-1"
+                        data-en="Join as Partner" data-ta="கூட்டாளராகுங்கள்">
+                        Join as Partner
                     </a>
                 </p>
             </div>
 
             <p id="error-msg"
-                class="text-red-500 text-center text-sm font-semibold bg-red-50 py-3 rounded-xl hidden animate-pulse">
+                class="text-red-400 text-center text-xs font-black bg-red-500/10 py-3 border border-red-500/20 rounded-xl hidden">
             </p>
         </form>
 
-        <div class="mt-8 pt-6 border-t border-gray-100 flex justify-between items-center px-2">
+        <div class="mt-10 pt-8 border-t border-white/5 flex justify-between items-center px-2">
             <a href="/"
-                class="text-xs font-bold text-gray-400 uppercase tracking-widest hover:text-gray-600 transition-colors"
-                data-en="← Back Home" data-ta="← முகப்பு">← Back Home</a>
-            <span class="text-xs font-medium text-gray-300">V 2.0.1</span>
+                class="text-[10px] font-black text-var(--text-muted) uppercase tracking-widest hover:text-white transition-colors"
+                style="color:var(--text-muted)" data-en="← Back Home" data-ta="← முகப்பு">← Back Home</a>
+            <span class="text-[10px] font-black text-var(--text-dim) uppercase tracking-widest"
+                style="color:var(--text-dim)">V 2.5.0</span>
         </div>
     </div>
 </div>

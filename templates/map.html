@@ -6,7 +6,7 @@
     <meta name="google-site-verification" content="DxkaThy1RH8UMu7R3Zp9yNXSUtQg4CslIsUYAXuL0lA" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Nearva - Map</title>
-    <script src="{{ url_for('static', path='js/categories.js') }}"></script>
+    <script src="{{ url_for('static', path='js/categories.js') }}?v=2"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -15,7 +15,7 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #F8FAFC;
+            background-color: #111827;
             overflow: hidden !important;
             height: 100dvh !important;
             width: 100vw !important;
@@ -210,9 +210,10 @@
             z-index: 5000 !important;
             display: flex !important;
             flex-direction: column;
-            background: #F8FAFC !important;
-            box-shadow: 0 -20px 50px rgba(0, 0, 0, 0.15) !important;
+            background: #ffffff !important;
+            box-shadow: 0 -20px 50px rgba(0, 0, 0, 0.1) !important;
             padding-bottom: env(safe-area-inset-bottom, 20px) !important;
+            border: 1px solid rgba(0,0,0,0.05) !important;
         }
 
         #category-selection-sheet.open {
@@ -232,18 +233,13 @@
         .service-grid {
             display: grid !important;
             grid-template-columns: repeat(3, 1fr) !important;
-            /* Mobile Default */
             grid-auto-rows: min-content !important;
-            /* Force rows to fit content */
             gap: 12px !important;
-            /* Slightly tighter for modern feel */
             padding: 12px 14px 100px !important;
-            /* Extra bottom padding for scroll room */
             width: 100% !important;
-            background: #F8FAFC !important;
+            background: #ffffff !important;
             overflow-y: auto !important;
             -webkit-overflow-scrolling: touch !important;
-            /* Smooth mobile scroll */
             touch-action: pan-y !important;
             overscroll-behavior-y: contain !important;
             will-change: transform;
@@ -255,28 +251,22 @@
             aspect-ratio: 1 / 1 !important;
             width: 100% !important;
             padding: 10px !important;
-            /* Compact, consistent padding */
             border-radius: 16px !important;
-            /* Modern softer corners */
             display: flex !important;
             flex-direction: column !important;
             align-items: center !important;
             justify-content: center !important;
-            background: white !important;
-            border: 1px solid #F1F5F9 !important;
-            /* Very soft border */
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03) !important;
-            /* Subtle professional shadow */
+            background: #f5f5f5 !important;
+            border: 1px solid rgba(0,0,0,0.03) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
             transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
             position: relative !important;
             cursor: pointer !important;
             overflow: hidden !important;
-            /* Keep it square */
         }
 
         .cat-option span.text-2xl {
             font-size: 1.1rem !important;
-            /* Further reduced for elegance */
             margin-bottom: 5px !important;
             display: block;
             transition: transform 0.2s ease;
@@ -284,10 +274,9 @@
 
         .cat-option span.text-xs {
             font-size: 9px !important;
-            /* Readable but compact text */
             font-weight: 700 !important;
             text-transform: uppercase;
-            color: #64748B;
+            color: #111827 !important;
             text-align: center;
             line-height: 1.2 !important;
         }
@@ -297,9 +286,9 @@
         }
 
         .cat-option.active-card {
-            background: #EFF6FF !important;
-            border-color: #2563EB !important;
-            box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.1) !important;
+            background: #2563EB !important;
+            border-color: #3B82F6 !important;
+            box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3) !important;
         }
 
         .cat-option.active-card span.text-xs {
@@ -758,6 +747,27 @@
             data-en="Close" data-ta="மூடு">Close</button>
     </div>
 
+    <!-- Login Required Modal -->
+    <div id="login-modal" class="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 opacity-0 pointer-events-none transition-all duration-300 px-6">
+        <div class="bg-white w-full max-w-sm rounded-[32px] overflow-hidden shadow-2xl transform translate-y-8 transition-all duration-300" id="login-modal-content">
+            <div class="h-2 w-full bg-blue-600"></div>
+            <div class="p-8 text-center">
+                <div class="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-6 text-blue-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                    </svg>
+                </div>
+                <h3 class="text-xl font-black text-gray-900 mb-3" data-en="Login Required" data-ta="உள்நுழைவு தேவை">Login Required</h3>
+                <p class="text-gray-500 font-medium text-sm leading-relaxed mb-8" data-en="Please login to view profile details and contact nearby workers." data-ta="சுயவிவர விவரங்களைப் பார்க்கவும் அருகிலுள்ள பணியாளர்களைத் தொடர்பு கொள்ளவும் உள்நுழையவும்.">Please login to view profile details and contact nearby workers.</p>
+                
+                <div class="flex flex-col gap-3">
+                    <a href="/user/login?next=/map" id="modal-login-btn" class="w-full py-4 bg-blue-600 text-white font-black rounded-2xl hover:bg-blue-700 active:scale-95 transition-all shadow-lg shadow-blue-600/20" data-en="Login Now" data-ta="இப்போது உள்நுழைக">Login Now</a>
+                    <button onclick="closeLoginModal()" class="w-full py-4 bg-gray-50 text-gray-500 font-bold rounded-2xl active:scale-95 transition-all" data-en="Cancel" data-ta="ரத்துசெய்">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Map UI Controls (Right Side) -->
     <div id="map-controls-group"
         class="absolute bottom-[160px] right-4 z-[2000] flex flex-col gap-4 pointer-events-none items-center">
@@ -863,6 +873,220 @@
     </div>
 
     <!-- Map Scripts -->
+    <!-- Session State for Login Gate -->
+    <script>
+        // Injected from server session
+        const IS_USER_LOGGED_IN = "{{ 'true' if user_id else 'false' }}" === "true";
+        const USER_ID    = "{{ user_id or '' }}";
+        const USER_PHONE = "{{ user_phone or '' }}";
+
+        // ── Login Modal ─────────────────────────────────────
+        window.openLoginModal = function(nextAction) {
+            const modal   = document.getElementById('login-modal');
+            const content = document.getElementById('login-modal-content');
+            const loginBtn = document.getElementById('modal-login-btn');
+            // preserve worker context so user can return
+            const workerParam = window._pendingWorkerId ? `&worker=${window._pendingWorkerId}` : '';
+            if (loginBtn) loginBtn.href = `/user/login?next=/map${workerParam}`;
+            modal.classList.remove('pointer-events-none','opacity-0');
+            modal.classList.add('opacity-100','pointer-events-auto');
+            requestAnimationFrame(() => {
+                content.classList.remove('translate-y-8');
+                content.classList.add('translate-y-0');
+            });
+        };
+        window.closeLoginModal = function() {
+            const modal   = document.getElementById('login-modal');
+            const content = document.getElementById('login-modal-content');
+            modal.classList.add('opacity-0','pointer-events-none');
+            modal.classList.remove('opacity-100','pointer-events-auto');
+            content.classList.add('translate-y-8');
+            content.classList.remove('translate-y-0');
+        };
+
+        // ── In-App Chat Functions ───────────────────────────
+        let _chatWorkerId   = null;
+        let _chatWorkerName = null;
+        let _chatPollTimer  = null;
+
+        window.openInAppChat = function(workerId, workerName, workerPhone) {
+            if (!IS_USER_LOGGED_IN || !USER_ID) {
+                window._pendingWorkerId = workerId;
+                window.openLoginModal();
+                return;
+            }
+            _chatWorkerId   = workerId;
+            _chatWorkerName = workerName || 'Worker';
+
+            // Build chat ID
+            const chatId = `user_${USER_ID}_worker_${workerId}`;
+            window._activeChatId = chatId;
+
+            // Set header
+            if (nameEl) {
+                nameEl.textContent = _chatWorkerName;
+                nameEl.className = "font-black text-slate-900 text-base leading-tight";
+            }
+            if (initEl) {
+                initEl.textContent  = (_chatWorkerName && _chatWorkerName !== 'Worker') ? _chatWorkerName.charAt(0).toUpperCase() : 'W';
+                initEl.className = `w-11 h-11 rounded-full flex items-center justify-center text-white font-black text-xl border-2 border-white shadow-sm`;
+                initEl.style.background = `linear-gradient(135deg,#6366f1,#4f46e5)`;
+            }
+
+            // Show overlay
+            const overlay = document.getElementById('map-chat-overlay');
+            if (overlay) {
+                overlay.classList.remove('hidden','translate-x-full');
+                overlay.classList.add('translate-x-0');
+            }
+
+            // Load messages + auto-send "Hi" if fresh chat
+            loadMapChatMessages(chatId);
+            clearInterval(_chatPollTimer);
+            _chatPollTimer = setInterval(() => loadMapChatMessages(chatId), 3000);
+        };
+
+        window.closeInAppChat = function() {
+            clearInterval(_chatPollTimer);
+            const overlay = document.getElementById('map-chat-overlay');
+            if (overlay) {
+                overlay.classList.remove('translate-x-0');
+                overlay.classList.add('translate-x-full');
+                setTimeout(() => overlay.classList.add('hidden'), 380);
+            }
+            window._activeChatId = null;
+        };
+
+        async function loadMapChatMessages(chatId) {
+            const res = await fetch(`/api/messages/${chatId}`).catch(()=>null);
+            if (!res || !res.ok) return;
+            const data = await res.json();
+            const msgs = data.messages || [];
+
+            const container = document.getElementById('map-chat-messages');
+            if (!container) return;
+            const atBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 10;
+
+            if (msgs.length === 0) {
+                container.innerHTML = `<div class="flex flex-col items-center justify-center h-full py-16 text-center">
+                    <div class="text-4xl mb-3">👋</div>
+                    <p class="text-sm text-gray-400 font-medium">Say hi to ${_chatWorkerName}!</p>
+                </div>`;
+                return;
+            }
+
+            container.innerHTML = msgs.map(m => {
+                const isUser = m.sender_type === 'user';
+                const time   = new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+                return isUser
+                    ? `<div class="flex justify-end">
+                        <div style="background:#2563eb;color:white;border-radius:20px 20px 4px 20px" class="px-4 py-2.5 max-w-[75%]">
+                            <p class="text-sm font-medium leading-relaxed">${escapeMapHtml(m.message)}</p>
+                            <p class="text-[10px] mt-1 text-right" style="opacity:0.7">${time} ✓✓</p>
+                        </div></div>`
+                    : `<div class="flex items-end gap-2">
+                        <div class="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-black flex-shrink-0" style="background:linear-gradient(135deg,#6366f1,#4f46e5)">${(_chatWorkerName||'W').charAt(0)}</div>
+                        <div style="background:#f1f5f9;color:#1e293b;border-radius:20px 20px 20px 4px" class="px-4 py-2.5 max-w-[75%]">
+                            <p class="text-sm font-medium leading-relaxed">${escapeMapHtml(m.message)}</p>
+                            <p class="text-[10px] text-gray-400 mt-1">${time}</p>
+                        </div></div>`;
+            }).join('');
+
+            if (atBottom) container.scrollTop = container.scrollHeight;
+        }
+
+        window.sendMapChatMessage = async function() {
+            const input = document.getElementById('map-chat-input');
+            const msg   = (input ? input.value : '').trim();
+            if (!msg || !window._activeChatId || !USER_ID) return;
+            if (input) input.value = '';
+
+            // ── Optimistic UI Append ──
+            const container = document.getElementById('map-chat-messages');
+            if (container) {
+                // If it was empty placeholder, clear it
+                if (container.innerHTML.includes('Say hi')) container.innerHTML = '';
+                
+                const time = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+                container.innerHTML += `<div class="flex justify-end map-msg-optimistic transition-opacity duration-300 opacity-50">
+                    <div style="background:#2563eb;color:white;border-radius:20px 20px 4px 20px" class="px-4 py-2.5 max-w-[75%]">
+                        <p class="text-sm font-medium leading-relaxed">${escapeMapHtml(msg)}</p>
+                        <p class="text-[10px] mt-1 text-right" style="opacity:0.7">${time} 🕒</p>
+                    </div></div>`;
+                container.scrollTop = container.scrollHeight;
+            }
+
+            const res = await fetch('/api/messages/send', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({
+                    chat_id:     window._activeChatId,
+                    sender_id:   USER_ID,
+                    sender_type: 'user',
+                    message:     msg
+                })
+            }).catch(()=>null);
+            
+            if (res && res.ok) {
+                // Replace optimstic '🕒' with '✓✓' instantly if we don't want to wait for poll
+                const optimistics = document.querySelectorAll('.map-msg-optimistic');
+                optimistics.forEach(el => {
+                    el.classList.remove('opacity-50', 'map-msg-optimistic');
+                    el.innerHTML = el.innerHTML.replace('🕒', '✓✓');
+                });
+            }
+            // Background sync
+            loadMapChatMessages(window._activeChatId);
+        };
+
+        function escapeMapHtml(t) {
+            return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        // Call gate function
+        window.gatedCall = function(phone, workerId) {
+            if (!IS_USER_LOGGED_IN) {
+                window._pendingWorkerId = workerId;
+                window.openLoginModal();
+                return;
+            }
+            if (phone) window.location.href = `tel:${phone}`;
+        };
+    </script>
+
+    <!-- ══ IN-APP CHAT OVERLAY (Instagram DM style) ══ -->
+    <div id="map-chat-overlay" class="hidden fixed inset-0 z-[8000] flex flex-col bg-white translate-x-full transition-transform duration-380 ease-[cubic-bezier(0.16,1,0.3,1)]" style="transition:transform 0.38s cubic-bezier(0.16,1,0.3,1)">
+
+        <!-- Chat Header -->
+        <div style="background:rgba(255,255,255,0.92);backdrop-filter:blur(20px);border-bottom:1px solid #f1f5f9;padding-top:env(safe-area-inset-top,0px)" class="flex items-center gap-3 px-4 h-16">
+            <button onclick="closeInAppChat()" class="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center active:scale-90 transition-all flex-shrink-0">
+                <svg class="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <div id="map-chat-avatar" class="w-9 h-9 rounded-full flex items-center justify-center text-white font-black text-sm flex-shrink-0" style="background:linear-gradient(135deg,#6366f1,#4f46e5)"></div>
+            <div class="flex-1 min-w-0">
+                <p id="map-chat-worker-name" class="font-black text-gray-900 text-sm truncate"></p>
+                <p class="text-[10px] font-bold text-green-500 flex items-center gap-1">
+                    <span class="w-1.5 h-1.5 bg-green-400 rounded-full inline-block animate-pulse"></span>Online
+                </p>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        <div id="map-chat-messages" class="flex-1 overflow-y-auto px-4 py-4 space-y-3" style="padding-bottom:90px;overscroll-behavior:contain"></div>
+
+        <!-- Input Bar -->
+        <div class="px-4 py-3 border-t border-gray-100 bg-white" style="padding-bottom:max(14px,env(safe-area-inset-bottom))">
+            <div class="flex items-center gap-3 bg-gray-50 rounded-2xl px-4 py-3 border border-gray-100">
+                <input id="map-chat-input" type="text" placeholder="Type a message..."
+                    class="flex-1 bg-transparent text-sm font-medium text-gray-900 outline-none placeholder-gray-400"
+                    onkeydown="if(event.key==='Enter') sendMapChatMessage()">
+                <button onclick="sendMapChatMessage()" class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 active:scale-90 transition-all" style="background:#2563eb;box-shadow:0 4px 14px -4px rgba(37,99,235,0.5)">
+                    <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="/static/js/map_init.js?v=1.0"></script>
     <script src="/static/js/map.js?v=map_polish_v2"></script>
 </body>

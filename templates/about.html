@@ -294,105 +294,102 @@
                 if (data && data.length > 0) {
                     data.forEach(amb => {
                         const card = document.createElement('div');
-                        card.className = 'bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden';
+                        card.className = 'bg-white rounded-[16px] shadow-sm border border-gray-100 overflow-hidden transition-all duration-300 hover:shadow-md';
                         
-                        let workersHtml = '';
-                        if (amb.workers && amb.workers.length > 0) {
-                            workersHtml = `
-                                <div class="overflow-x-auto rounded-xl border border-gray-200 shadow-sm mt-4">
-                                    <table class="w-full text-left text-sm whitespace-nowrap">
-                                        <thead class="bg-gray-50/80 text-gray-500 uppercase font-bold text-[10px] tracking-wider border-b border-gray-200">
-                                            <tr>
-                                                <th class="px-4 py-3.5">Worker Name</th>
-                                                <th class="px-4 py-3.5">Service</th>
-                                                <th class="px-4 py-3.5">Location</th>
-                                                <th class="px-4 py-3.5">Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-gray-100">
-                                            ${amb.workers.map((w, idx) => {
-                                                const bgClass = idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/30';
-                                                const isOnline = w.is_online === true || w.is_online === 'true';
-                                                const statusColor = isOnline ? 'bg-green-100/50 text-green-700 border-green-200' : 'bg-gray-100/50 text-gray-600 border-gray-200';
-                                                const statusText = isOnline ? 'Online' : 'Offline';
-                                                const statusDot = isOnline ? 'bg-green-500' : 'bg-gray-400';
-                                                
-                                                return `
-                                                <tr class="${bgClass} hover:bg-blue-50/20 transition-colors group">
-                                                    <td class="px-4 py-3.5 font-bold text-gray-900">
-                                                        <div class="flex items-center gap-2.5">
-                                                            <div class="w-7 h-7 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center font-bold text-[11px] shrink-0 border border-blue-100">${w.name.charAt(0)}</div>
-                                                            ${w.name}
-                                                        </div>
-                                                    </td>
-                                                    <td class="px-4 py-3.5 font-semibold text-gray-600">${w.service}</td>
-                                                    <td class="px-4 py-3.5 text-gray-500">
-                                                        <div class="flex items-center gap-1"><span class="text-gray-300">📍</span> ${w.area || '-'}</div>
-                                                    </td>
-                                                    <td class="px-4 py-3.5">
-                                                        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${statusColor}">
-                                                            <span class="w-1.5 h-1.5 rounded-full ${statusDot}"></span>
-                                                            ${statusText}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                                `;
-                                            }).join('')}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            `;
-                        } else {
-                            workersHtml = `
-                                <div class="mt-4 p-8 bg-gray-50/50 rounded-xl border border-dashed border-gray-200 text-center">
-                                    <p class="text-sm font-semibold text-gray-400">No workers added under this ambassador yet.</p>
-                                </div>
-                            `;
-                        }
+                        // Fallback to pre-calculated stats (or 0)
+                        let totalWorkers = amb.stats?.total || 0;
+                        let approvedWorkers = amb.stats?.approved || 0;
+                        let pendingWorkers = amb.stats?.pending || 0;
 
                         card.innerHTML = `
-                            <details class="group [&_summary::-webkit-details-marker]:hidden">
-                                <summary class="p-6 cursor-pointer list-none flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/50 transition-colors">
+                            <details id="details-${amb.id}" class="group [&_summary::-webkit-details-marker]:hidden bg-white">
+                                <summary class="p-[16px] sm:p-[20px] cursor-pointer list-none flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors hover:bg-gray-50/80">
                                     <div class="flex items-center gap-4">
-                                        <div class="w-14 h-14 bg-gradient-to-br from-blue-50 to-[#eff6ff] rounded-2xl flex items-center justify-center text-blue-600 font-bold text-xl flex-shrink-0 border border-blue-100 group-hover:scale-105 transition-transform duration-300 shadow-sm">
+                                        <div class="w-14 h-14 bg-gradient-to-br from-blue-50 to-[#eff6ff] rounded-2xl flex items-center justify-center text-blue-600 font-bold text-xl flex-shrink-0 border border-blue-100 shadow-sm">
                                             ${amb.name.charAt(0).toUpperCase()}
                                         </div>
                                         <div>
                                             <h4 class="font-bold text-gray-900 text-lg flex flex-wrap items-center gap-2">
                                                 ${amb.name} 
-                                                <span class="text-[10px] bg-blue-100/50 text-blue-700 px-2 py-0.5 rounded-sm uppercase tracking-wider font-black border border-blue-200/50">Community Ambassador</span>
+                                                <span class="text-[10px] bg-blue-100/50 text-blue-700 px-2 py-0.5 rounded-sm uppercase tracking-wider font-extrabold border border-blue-200/50">Community Ambassador</span>
                                             </h4>
-                                            <div class="flex items-center gap-1.5 text-sm font-semibold text-gray-500 mt-1.5">
-                                                <span class="text-gray-400">📍</span> <span class="truncate">${amb.area}</span>
+                                            <div class="flex items-center gap-1.5 text-sm font-semibold text-gray-400 mt-1">
+                                                <span>📍</span> <span class="truncate">${amb.area || 'Local'}</span>
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="text-blue-500 bg-blue-50 p-2 rounded-full border border-blue-100 group-hover:bg-blue-100 transition-colors">
+                                    <div class="text-blue-500 bg-blue-50/50 p-2 rounded-full border border-blue-100/50 transition-colors group-hover:bg-blue-100">
                                         <svg class="w-5 h-5 transform transition-transform duration-300 group-open:-rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7" />
                                         </svg>
                                     </div>
                                 </summary>
                                 
-                                <div class="px-6 pb-6 border-t border-gray-100 bg-white">
-                                    <div class="pt-6">
-                                        <div class="mb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                                            <h5 class="text-[15px] font-bold text-gray-900 tracking-tight">Workers Added by ${amb.name}</h5>
-                                            <span class="inline-flex items-center gap-1 text-[10px] bg-green-50 text-green-700 px-2.5 py-1 rounded-full uppercase tracking-wider font-bold border border-green-100">
-                                                <span class="text-green-500">✓</span> Verified under Ambassador: ${amb.name.split(' ')[0]}
-                                            </span>
+                                <div class="px-[16px] sm:px-[20px] pb-[20px] border-t border-gray-100 bg-gray-50/30 transition-all duration-300 ease-in-out">
+                                    <div class="pt-[16px]">
+                                        <div id="stats-container-${amb.id}" class="${totalWorkers === 0 ? 'hidden' : 'grid grid-cols-3 gap-3 sm:gap-4 text-center'}">
+                                            <div class="bg-slate-900 p-4 rounded-[16px] border border-slate-800 shadow-xl transition-transform hover:translate-y-[-2px]">
+                                                <div class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Total Workers</div>
+                                                <div id="stat-total-${amb.id}" class="text-2xl sm:text-4xl font-extrabold text-[#3b82f6]">${totalWorkers}</div>
+                                            </div>
+                                            <div class="bg-slate-900 p-4 rounded-[16px] border border-slate-800 shadow-xl transition-transform hover:translate-y-[-2px]">
+                                                <div class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Approved</div>
+                                                <div id="stat-app-${amb.id}" class="text-2xl sm:text-4xl font-extrabold text-green-500">${approvedWorkers}</div>
+                                            </div>
+                                            <div class="bg-slate-900 p-4 rounded-[16px] border border-slate-800 shadow-xl transition-transform hover:translate-y-[-2px]">
+                                                <div class="text-[10px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1.5">Pending</div>
+                                                <div id="stat-pen-${amb.id}" class="text-2xl sm:text-4xl font-extrabold text-orange-400">${pendingWorkers}</div>
+                                            </div>
                                         </div>
-                                        ${workersHtml}
+                                        <div id="empty-state-${amb.id}" class="${totalWorkers > 0 ? 'hidden' : 'py-6 flex flex-col items-center justify-center text-center'}">
+                                            <span class="text-3xl mb-2">🌱</span>
+                                            <p class="text-gray-500 font-medium">No workers yet under this ambassador.</p>
+                                        </div>
                                     </div>
                                 </div>
                             </details>
                         `;
                         container.appendChild(card);
+
+                        // Real-time expansion fetch logic
+                        const details = card.querySelector(`#details-${amb.id}`);
+                        let hasFetched = false;
+                        details.addEventListener('toggle', async (e) => {
+                            if (details.open && !hasFetched) {
+                                try {
+                                    const statsRes = await fetch(`/api/public/ambassador/${amb.id}/stats`);
+                                    if(statsRes.ok) {
+                                        const statsData = await statsRes.json();
+                                        
+                                        const cTotal = statsData.total_workers || 0;
+                                        const cApp = statsData.approved_workers || 0;
+                                        const cPen = statsData.pending_workers || 0;
+                                        
+                                        // Update UI
+                                        document.getElementById(`stat-total-${amb.id}`).innerText = cTotal;
+                                        document.getElementById(`stat-app-${amb.id}`).innerText = cApp;
+                                        document.getElementById(`stat-pen-${amb.id}`).innerText = cPen;
+                                        
+                                        if (cTotal === 0) {
+                                            document.getElementById(`stats-container-${amb.id}`).classList.add('hidden');
+                                            document.getElementById(`empty-state-${amb.id}`).classList.remove('hidden');
+                                        } else {
+                                            document.getElementById(`stats-container-${amb.id}`).classList.remove('hidden');
+                                            document.getElementById(`empty-state-${amb.id}`).classList.add('hidden');
+                                        }
+                                    }
+                                    hasFetched = true; // only fetch once per card open to save bandwidth
+                                } catch(err) {
+                                    console.error('Failed to fetch live stats', err);
+                                }
+                            }
+                        });
                     });
                 } else {
                     if(section) section.style.display = 'none';
                 }
             } catch (e) {
+                console.error(e);
                 const section = document.getElementById('ambassador-section');
                 if (section) section.style.display = 'none';
             }

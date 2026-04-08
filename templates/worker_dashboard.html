@@ -1,297 +1,758 @@
+{% set dark_nav = False %}
 {% extends 'base.html' %}
 
 {% block title %}Worker Dashboard - Nearva{% endblock %}
 
 {% block head %}
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <style>
-    .pulse-active {
-        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    /* ── Design System (Premium Dark Mode) ── */
+    :root {
+        --bg-base:      #111827; /* Dark Grey Background */
+        --bg-card:      #1f2937; /* Card Background */
+        --bg-surface:   #111827; 
+        --bg-elevated:  #374151;
+        --border:       rgba(255, 255, 255, 0.05);
+        --text-primary: #ffffff;
+        --text-muted:   #9ca3af;
+        --text-dim:     #6b7280;
+        --accent:       #3b82f6; /* Modern Blue */
+        --eco-green:    #10b981;
+        --radius-lg:    24px;
+        --radius-md:    16px;
+        --section-gap:  20px;
+        --card-pad:     16px;
     }
 
-    @keyframes blink {
-
-        0%,
-        100% {
-            opacity: 1;
-            transform: scale(1);
-        }
-
-        50% {
-            opacity: 0.5;
-            transform: scale(1.2);
-        }
+    html { scroll-behavior: smooth; background: var(--bg-base); }
+    body {
+        font-family: 'Outfit', 'Inter', system-ui, sans-serif;
+        background: var(--bg-base);
+        color: var(--text-primary);
+        min-height: 100vh;
+        overflow-x: hidden;
     }
 
-    .blink {
-        animation: blink 2s ease-in-out infinite;
+    * { -webkit-tap-highlight-color: transparent; }
+
+    /* Animations */
+    @keyframes slideUp {
+        from { opacity:0; transform:translateY(12px); }
+        to   { opacity:1; transform:translateY(0); }
+    }
+    .slide-up { animation: slideUp 0.35s cubic-bezier(0.16,1,0.3,1) both; }
+    
+    @keyframes slideInLeft {
+        from { transform: translateX(-100%); }
+        to   { transform: translateX(0); }
     }
 
-    @keyframes pulse {
+    /* Scrollbars */
+    .no-scrollbar::-webkit-scrollbar { display:none; }
+    .no-scrollbar { -ms-overflow-style:none; scrollbar-width:none; }
 
-        0%,
-        100% {
-            opacity: 1;
-        }
+    /* Card Styling */
+    .section-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: var(--card-pad);
+        box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+    }
 
-        50% {
-            opacity: .5;
-        }
+    .stat-card-dark {
+        background: rgba(255,255,255,0.03);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: 12px;
+    }
+
+    /* Buttons */
+    .btn-primary-blue {
+        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+        color: white;
+        border-radius: 14px;
+        font-weight: 800;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+        transition: all 0.2s;
+    }
+    .btn-primary-blue:active { transform: scale(0.96); opacity: 0.9; }
+
+    .btn-dark-elevated {
+        background: var(--bg-elevated);
+        color: white;
+        border-radius: 14px;
+        font-weight: 700;
+        border: 1px solid var(--border);
+    }
+    .btn-dark-elevated:active { transform: scale(0.96); }
+
+    /* Screen Management */
+    .app-screen {
+        display: none;
+        flex-direction: column;
+        gap: var(--section-gap);
+        width: 100%;
+        min-height: 100vh;
+        padding-top: 80px; /* Header space */
+        padding-bottom: 120px; /* Nav space */
+        box-sizing: border-box;
+    }
+    .app-screen.active { display: flex; }
+
+    /* Sidebar Styles */
+    #dashboard-sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 280px;
+        height: 100%;
+        background: var(--bg-surface);
+        z-index: 1000;
+        transform: translateX(-100%);
+        transition: transform 0.4s cubic-bezier(0.16,1,0.3,1);
+        border-right: 1px solid var(--border);
+        padding: 32px 24px;
+    }
+    #dashboard-sidebar.open { transform: translateX(0); }
+    #sidebar-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.6);
+        backdrop-filter: blur(4px);
+        z-index: 999;
+        display: none;
+    }
+    #sidebar-overlay.active { display: block; }
+
+    /* Badges */
+    .badge-dark {
+        background: rgba(255,255,255,0.05);
+        color: var(--text-muted);
+        border: 1px solid var(--border);
+        font-size: 10px;
+        font-weight: 800;
+        padding: 4px 10px;
+        border-radius: 100px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    /* Re-using existing Chat screen fix for general app structure */
+    #worker-chat-screen {
+        background: var(--bg-base);
+        z-index: 1100;
+        transition: transform 0.38s cubic-bezier(0.16,1,0.3,1), opacity 0.3s ease;
+        transform: translateX(100%);
+        opacity: 0;
+        pointer-events: none;
+    }
+    #worker-chat-screen.active { transform: translateX(0); opacity: 1; pointer-events: auto; }
+    /* ── Chat bubbles ── */
+    .bubble-user   { background: var(--bg-card); color: white; border-radius: 20px 20px 20px 4px; position: relative; }
+    .bubble-worker { background: linear-gradient(135deg,#3b82f6,#2563eb); color: white; border-radius: 20px 20px 4px 20px; position: relative; }
+    
+    .delete-msg-btn {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        width: 20px;
+        height: 20px;
+        background: #ef4444;
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        cursor: pointer;
+        opacity: 0;
+        transition: all 0.2s;
+        border: 2px solid #0f172a;
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+        z-index: 10;
+    }
+    .bubble-user:hover .delete-msg-btn, .bubble-worker:hover .delete-msg-btn { opacity: 1; }
+    .delete-msg-btn:hover { transform: scale(1.1); background: #dc2626; }
+    /* ── Subscription Plans ── */
+    .plan-card {
+        background: var(--bg-card);
+        border-radius: 28px;
+        overflow: hidden;
+        border: 2px solid transparent;
+        transition: transform 0.2s, border-color 0.2s;
+        cursor: pointer;
+    }
+    .plan-card.popular { border-color: var(--accent); box-shadow: 0 12px 40px rgba(99,102,241,0.15); }
+    .plan-card.basic   { border-color: var(--border); }
+
+    /* ── Wallet ── */
+    .wallet-bg {
+        background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+        border: 1px solid rgba(99,102,241,0.2);
+    }
+
+    /* ── Section Tabs ── */
+    .wsection { display: none; }
+    .wsection.active { display: flex; flex-direction: column; gap: 1.25rem; }
+    .wsection-always { display: flex; flex-direction: column; gap: 1.25rem; }
+
+    /* ── Toast ── */
+    #wtoast {
+        position: fixed; bottom: 88px; left: 50%; transform: translateX(-50%) translateY(20px);
+        background: var(--bg-elevated); color: white; padding: 12px 24px;
+        border-radius: 100px; font-size: 13px; font-weight: 800;
+        opacity: 0; pointer-events: none; z-index: 9999;
+        transition: opacity 0.3s, transform 0.3s;
+        border: 1px solid var(--border);
+    }
+    #wtoast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #wtoast.error { background: #dc2626; }
+
+    /* Map Preview Card */
+    .map-preview-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        overflow: hidden;
+        position: relative;
+        height: 120px;
+        cursor: pointer;
+        transition: transform 0.2s;
+    }
+    .map-preview-card:active { transform: scale(0.98); }
+    .map-preview-img {
+        width: 100%; height: 100%; object-fit: cover;
+        opacity: 0.6;
+    }
+    .map-preview-overlay {
+        position: absolute; inset: 0;
+        background: linear-gradient(to top, rgba(17,24,39,0.8), transparent);
+        display: flex; align-items: flex-end; padding: 16px;
+    }
+    /* Bottom Nav Contrast */
+    .nav-item { opacity: 0.6; transition: all 0.2s; position: relative; }
+    .nav-item.active { opacity: 1; }
+    .nav-item.active .nav-icon-box { color: var(--accent); }
+    .nav-item.active .label { color: var(--accent); font-weight: 800; }
+    .nav-item:not(.active) .nav-icon-box { color: #6b7280; }
+    .nav-item:not(.active) .label { color: #6b7280; font-weight: 600; }
+
+    /* Notification Badge */
+    .notification-badge {
+        position: absolute;
+        top: 4px;
+        right: 12px;
+        background: var(--red);
+        color: white;
+        font-size: 10px;
+        font-weight: 900;
+        min-width: 18px;
+        height: 18px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid #111827;
+        box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+        z-index: 10;
+        animation: badge-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes badge-pop {
+        0% { transform: scale(0); }
+        100% { transform: scale(1); }
     }
 </style>
 {% endblock %}
 
+{% block mobile_nav %}
+<!-- Professional Worker Navigation -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full z-[1000] pb-safe">
+    <div class="relative max-w-lg mx-auto bg-[#111827]/95 backdrop-blur-2xl border-t border-white/5 shadow-[0_-10px_40px_rgba(0,0,0,0.4)] h-20 flex items-center justify-between px-2 overflow-visible">
+        
+        <!-- Home -->
+        <button onclick="switchScreen('home')" id="nav-home" class="nav-item active flex-1 flex flex-col items-center justify-center gap-1.5 transition-all">
+            <div class="nav-icon-box p-2 rounded-xl transition-all">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+            </div>
+            <span class="text-[11px] font-bold uppercase tracking-widest label">Home</span>
+        </button>
+
+        <!-- Requests -->
+        <button onclick="switchScreen('requests')" id="nav-requests" class="nav-item flex-1 flex flex-col items-center justify-center gap-1.5 transition-all">
+            <div class="nav-icon-box p-2 rounded-xl transition-all">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            </div>
+            <span id="nav-req-badge" class="notification-badge hidden">0</span>
+            <span class="text-[11px] font-bold uppercase tracking-widest label">Job</span>
+        </button>
+
+        <!-- Dynamic FAB (Chat) -->
+        <div class="flex-1 flex justify-center -mt-10 overflow-visible relative">
+            <button onclick="switchScreen('chat')" id="nav-chat" class="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center text-white shadow-[0_8px_25px_rgba(37,99,235,0.4)] border-4 border-[#111827] active:scale-90 transition-all z-[1001] relative">
+                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                <span id="nav-chat-badge" class="notification-badge hidden" style="top: -8px; right: -8px; border-color: #111827;">0</span>
+            </button>
+            <span class="absolute bottom-[-22px] text-[10px] font-black uppercase tracking-widest text-blue-500 label">Inbox</span>
+        </div>
+
+        <!-- Wallet -->
+        <button onclick="switchScreen('wallet')" id="nav-wallet" class="nav-item flex-1 flex flex-col items-center justify-center gap-1.5 transition-all">
+            <div class="nav-icon-box p-2 rounded-xl transition-all">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <span class="text-[11px] font-bold uppercase tracking-widest label">Pay</span>
+        </button>
+
+        <!-- Plans -->
+        <button onclick="switchScreen('plans')" id="nav-plans" class="nav-item flex-1 flex flex-col items-center justify-center gap-1.5 transition-all">
+            <div class="nav-icon-box p-2 rounded-xl transition-all">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-7.714 2.143L11 21l-2.143-7.714L1 12l7.714-2.143L11 3z"/></svg>
+            </div>
+            <span class="text-[11px] font-bold uppercase tracking-widest label">Pro</span>
+        </button>
+
+    </div>
+</nav>
+{% endblock %}
+
 {% block content %}
-<div class="bg-gray-50 min-h-screen pt-32 pb-20">
-    <!-- Main Content -->
-    <main class="max-w-lg mx-auto px-6 space-y-6 w-full">
-        <!-- Dashboard Header with Logout -->
-        <div class="flex justify-between items-center mb-2">
-            <h1 class="text-2xl font-black text-gray-900" data-en="Dashboard" data-ta="டாஷ்போர்டு">Dashboard</h1>
-            <button onclick="logout()"
-                class="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100 transition-all active:scale-95 border border-red-100 shadow-sm">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
-                    stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"
-                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
-                </svg>
-                <span data-en="Logout" data-ta="வெளியேறு">Logout</span>
+
+<div id="wtoast"></div>
+
+<!-- Sidebar Overlay -->
+<div id="sidebar-overlay" onclick="toggleSidebar(false)" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[999] hidden"></div>
+
+<!-- Sidebar (Hamburger Menu) -->
+<aside id="dashboard-sidebar" class="fixed top-0 left-0 w-[280px] h-full bg-[#111827] z-[1000] border-r border-white/5 p-8 transition-transform duration-400 translate-x-[-100%] flex flex-col">
+    <div class="flex items-center gap-4 mb-10 pb-6 border-b border-white/5">
+        <div class="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg">N</div>
+        <div>
+            <h2 class="text-white font-black text-lg">Nearva</h2>
+            <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Worker Portal</p>
+        </div>
+    </div>
+
+    <nav class="flex flex-col gap-2 flex-1">
+        <a href="/worker/profile" class="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/5 text-white transition-all active:scale-95">
+            <span class="text-xl">👤</span>
+            <span class="font-bold text-sm">My Profile</span>
+        </a>
+        <a href="/worker/profile" class="flex items-center gap-4 p-4 rounded-2xl text-gray-400 hover:text-white transition-all">
+            <span class="text-xl">✏️</span>
+            <span class="font-medium text-sm">Edit Profile</span>
+        </a>
+        <div class="flex items-center justify-between p-4 rounded-2xl text-gray-400">
+            <div class="flex items-center gap-4">
+                <span class="text-xl">🔋</span>
+                <span class="font-medium text-sm">Availability</span>
+            </div>
+            <div id="sidebar-status-status" class="w-10 h-10 bg-white/5 rounded-xl border border-white/5 flex items-center justify-center text-[10px] font-black text-gray-500">OFF</div>
+        </div>
+        <a href="#" class="flex items-center gap-4 p-4 rounded-2xl text-gray-400 hover:text-white transition-all">
+            <span class="text-xl">⚙️</span>
+            <span class="font-medium text-sm">Settings</span>
+        </a>
+        <div class="my-6 border-t border-white/5"></div>
+        <a href="/api/worker/logout" class="flex items-center gap-4 p-4 rounded-2xl text-red-400 bg-red-500/5 transition-all active:scale-95">
+            <span class="text-xl">🚪</span>
+            <span class="font-bold text-sm">Logout</span>
+        </a>
+    </nav>
+    <div class="text-[9px] text-gray-600 font-bold text-center uppercase tracking-widest">v2.4.0 • Nearva India</div>
+</aside>
+
+<!-- Header -->
+<header class="fixed top-0 left-0 w-full h-16 bg-[#111827]/80 backdrop-blur-xl z-[900] px-5 flex items-center justify-between border-b border-white/5">
+    <button onclick="toggleSidebar(true)" class="w-10 h-10 flex items-center justify-center text-white bg-white/5 rounded-xl border border-white/5 active:scale-90 transition-all">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 6h16M4 12h16m-7 6h7"/></svg>
+    </button>
+    <div class="flex items-center gap-2">
+        <span class="text-white font-black text-xl tracking-tighter drop-shadow-md">NEARVA</span>
+    </div>
+    <div id="header-loc-indicator" class="w-10 h-10 bg-white/5 rounded-xl border border-white/5 flex items-center justify-center font-black text-gray-500 text-[10px] shadow-inner uppercase">Off</div>
+</header>
+
+<main class="flex flex-col px-5 max-w-lg mx-auto w-full pt-20 pb-32">
+    
+    <!-- ══ SCREEN: HOME ══ -->
+    <div id="screen-home" class="app-screen active">
+        
+        <!-- Profile Card -->
+        <div class="section-card flex items-center gap-4 mt-4">
+            <div class="relative shrink-0">
+                <img id="profile-card-avatar" src="https://ui-avatars.com/api/?name=Worker&background=3b82f6&color=fff"
+                    class="w-16 h-16 rounded-2xl object-cover border border-white/10 aspect-square"
+                    alt="Avatar">
+                <div id="home-status-dot" class="absolute -bottom-1 -right-1 w-4 h-4 bg-gray-500 border-2 border-[#1f2937] rounded-full shadow-sm"></div>
+            </div>
+            <div class="flex-1 min-w-0">
+                <h2 class="text-xl font-black text-white leading-tight truncate" id="worker-name-display">Loading...</h2>
+                <div class="flex flex-col gap-0.5 pt-1">
+                    <span id="worker-service-display" class="text-[10px] font-black uppercase tracking-widest text-blue-400 truncate">Service</span>
+                    <span id="worker-phone-display" class="text-xs text-gray-500 font-bold">+91 ********00</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Card -->
+        <div class="section-card text-center relative overflow-hidden" id="status-card">
+            <div id="status-visual" class="w-20 h-20 rounded-full mx-auto flex items-center justify-center mb-4 bg-white/5 border border-white/5 transition-all duration-700">
+                <span id="status-emoji" class="text-4xl opacity-30">😴</span>
+            </div>
+            <h3 id="status-header" class="text-lg font-black text-white mb-1">Go Live on Map</h3>
+            <p id="status-subtext" class="text-[10px] text-gray-500 font-bold mb-6 mx-auto max-w-[200px]">Only online workers receive job requests.</p>
+            
+            <label class="relative inline-flex items-center cursor-pointer scale-110">
+                <input type="checkbox" id="status-toggle" class="sr-only peer" onchange="handleToggleChange()">
+                <div class="w-16 h-8 bg-white/5 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-600 shadow-inner"></div>
+            </label>
+            <div id="save-hint" class="text-[9px] font-black uppercase tracking-widest text-blue-500 hidden mt-3">Syncing...</div>
+        </div>
+
+        <!-- Map Preview Card -->
+        <div class="slide-up delay-2" onclick="location.href='/map'">
+            <p class="text-[11px] font-black uppercase tracking-widest text-gray-500 mb-2 px-1">Nearby Activity</p>
+            <div class="map-preview-card shadow-lg border-white/5 bg-gradient-to-br from-blue-900/40 to-slate-900/60 relative flex items-center justify-center">
+                <!-- Clean Map Overlay -->
+                <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
+                <div class="relative flex items-center gap-4 px-6 w-full">
+                    <div class="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-[0_0_20px_rgba(37,99,235,0.4)]">
+                        <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    </div>
+                    <div>
+                        <p class="text-base font-black text-white">Full Screen Map</p>
+                        <p class="text-[11px] font-bold text-blue-400/80">View workers and jobs across the map</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Status Details (Requested) -->
+        <div id="live-status-details" class="section-card mt-2 hidden animate-in fade-in slide-in-from-top-4 duration-500">
+            <div class="flex items-center justify-between mb-4 border-b border-white/5 pb-3">
+                <h3 class="text-xs font-black text-white uppercase tracking-[0.1em]">Live Connection</h3>
+                <span class="flex items-center gap-1.5 text-[9px] font-black text-emerald-500 border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 rounded-full uppercase tracking-widest animate-pulse">Online</span>
+            </div>
+            <div class="grid grid-cols-2 gap-y-4 gap-x-2">
+                <div class="flex flex-col gap-1">
+                    <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest">Latitude</span>
+                    <span id="display-lat" class="text-xs font-mono font-bold text-white">0.00000</span>
+                </div>
+                <div class="flex flex-col gap-1 text-right">
+                    <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest">Longitude</span>
+                    <span id="display-lng" class="text-xs font-mono font-bold text-white">0.00000</span>
+                </div>
+                <div class="flex flex-col gap-1 col-span-2 border-t border-white/5 pt-3">
+                    <span class="text-[9px] font-black text-gray-500 uppercase tracking-widest">Last Active Sync</span>
+                    <div class="flex items-center justify-between">
+                        <span id="display-last-active" class="text-xs font-bold text-white">Just now</span>
+                        <div class="w-2 h-2 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="grid grid-cols-2 gap-4">
+            <button onclick="switchScreen('requests')" class="section-card flex flex-col items-center gap-3 py-6 active:scale-95 transition-all">
+                <div class="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center text-2xl">⚡</div>
+                <span class="text-[11px] font-black text-white uppercase tracking-widest">Job Requests</span>
+            </button>
+            <button onclick="switchScreen('chat')" class="section-card flex flex-col items-center gap-3 py-6 active:scale-95 transition-all">
+                <div class="w-12 h-12 bg-emerald-500/10 rounded-2xl flex items-center justify-center text-2xl">💬</div>
+                <span class="text-[11px] font-black text-white uppercase tracking-widest">Inbox Chat</span>
             </button>
         </div>
 
-        <!-- Profile Card -->
-        <div
-            class="w-full bg-white rounded-[2rem] p-6 shadow-xl shadow-blue-900/5 border border-gray-100 flex items-center gap-5 animate-fade-in">
-            <div class="relative shrink-0">
-                <img id="profile-card-avatar" src="https://ui-avatars.com/api/?name=Worker&background=random&color=fff"
-                    class="w-20 h-20 rounded-2xl object-cover shadow-md border-2 border-blue-50 aspect-square"
-                    alt="Avatar">
-                <div id="status-dot"
-                    class="absolute -bottom-1 -right-1 w-5 h-5 bg-gray-400 border-4 border-white rounded-full"></div>
+    </div> <!-- /screen-home -->
+
+    <!-- ══ SCREEN: REQUESTS ══ -->
+    <div id="screen-requests" class="app-screen">
+        <div class="px-2 flex items-center gap-4 mb-4">
+            <button onclick="switchScreen('home')" class="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center active:scale-95 transition-all">
+                <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <div>
+                <h2 class="text-sm font-black text-white uppercase tracking-widest mb-0.5">Job Pipeline</h2>
+                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Incoming & Active Jobs</p>
             </div>
-            <div class="flex-1">
-                <h2 class="text-xl font-extrabold text-gray-900 leading-tight" id="worker-name-display"
-                    data-en="Loading..." data-ta="ஏற்றுகிறது...">Loading...</h2>
-                <div class="flex items-center gap-2 mt-1">
-                    <span id="worker-service-display"
-                        class="px-3 py-1 bg-blue-50 text-blue-600 text-[10px] font-bold uppercase tracking-widest rounded-full">Service</span>
-                    <span id="worker-phone-display" class="text-xs text-gray-400 font-medium">0000000000</span>
-                </div>
-            </div>
-            <a href="/worker/profile"
-                class="p-3 bg-gray-50 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all text-gray-400">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path
-                        d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                </svg>
-            </a>
+            <div id="req-badge-mini" class="ml-auto hidden h-5 px-2 bg-red-600 rounded-full flex items-center justify-center text-[10px] font-black text-white animate-pulse">0 NEW</div>
         </div>
-
-        <!-- Approval Status -->
-        <div id="pending-message"
-            class="hidden w-full bg-amber-50 border border-amber-100 p-5 rounded-[1.5rem] animate-fade-in">
-            <div class="flex gap-4">
-                <span class="text-2xl">⏳</span>
-                <div>
-                    <h3 class="font-bold text-amber-900" data-en="Review in Progress" data-ta="சரிபார்ப்பு நடக்கிறது">
-                        Review in Progress</h3>
-                    <p class="text-sm text-amber-700/80 mt-1"
-                        data-en="Our team is verifying your details. You'll be live soon!"
-                        data-ta="எங்கள் குழு உங்கள் விவரங்களைச் சரிபார்க்கிறது. நீங்கள் விரைவில் நேரலையில் இருப்பீர்கள்!">
-                        Our team is verifying your details. You'll be live soon!
-                    </p>
-                </div>
-            </div>
+        <div id="requests-list" class="space-y-4">
+            <!-- Initial Skeletons -->
+            <div class="skeleton-dark h-40 w-full rounded-[24px]"></div>
         </div>
-
-        <!-- Status Card (Online/Offline Toggle) -->
-        <div class="w-full bg-white rounded-[2.5rem] shadow-2xl shadow-blue-900/10 p-10 text-center border border-gray-100 animate-fade-in"
-            id="status-card">
-
-            <div id="status-visual"
-                class="w-32 h-32 rounded-full mx-auto flex items-center justify-center mb-6 bg-gray-50 border-8 border-gray-100 transition-all duration-700">
-                <span id="status-emoji" class="text-5xl grayscale opacity-30 transition-all duration-700">😴</span>
-            </div>
-
-            <h3 id="status-header" class="text-2xl font-black text-gray-900 mb-2" data-en="You are Hidden"
-                data-ta="நீங்கள் மறைக்கப்பட்டுள்ளீர்கள்">You are Hidden</h3>
-            <p id="status-subtext" class="text-gray-400 font-medium mb-10 leading-relaxed"
-                data-en="Turn on GPS to appear on the Nearva map and receive requests."
-                data-ta="நியார்வா வரைபடத்தில் தோன்றவும் கோரிக்கைகளைப் பெறவும் ஜிபிஎஸ்-ஐ இயக்கவும்.">Turn on GPS to
-                appear on the
-                Nearva map and receive requests.</p>
-
-            <!-- Premium Premium Toggle -->
-            <div class="relative inline-flex items-center group">
-                <label class="relative inline-flex items-center cursor-pointer">
-                    <input type="checkbox" id="status-toggle" class="sr-only peer" onchange="handleToggleChange()">
-                    <div
-                        class="w-24 h-12 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:rounded-full after:h-10 after:w-10 after:transition-all peer-checked:bg-gradient-to-r peer-checked:from-blue-600 peer-checked:to-indigo-600 shadow-inner">
-                    </div>
-                </label>
-                <div id="save-hint"
-                    class="absolute -bottom-8 left-1/2 -translate-x-1/2 text-[10px] font-black uppercase tracking-widest text-blue-600 hidden"
-                    data-en="Syncing..." data-ta="ஒத்திசைக்கிறது...">
-                    Syncing...</div>
-            </div>
+        <div class="mt-4 px-2">
+            <h2 class="text-sm font-black text-white uppercase tracking-widest mb-1 uppercase tracking-widest">Work in Progress</h2>
         </div>
-
-        <!-- GPS Live Data -->
-        <div class="w-full bg-slate-900 rounded-[2rem] p-6 text-white shadow-xl hidden animate-fade-in" id="gps-info">
-            <div class="flex justify-between items-start mb-4">
-                <div>
-                    <p class="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-1"
-                        data-en="Live Location" data-ta="நேரடி இருப்பிடம்">Live Location</p>
-                    <h4 class="text-lg font-bold" data-en="Broadcasting GPS" data-ta="ஜிபிஎஸ் ஒளிபரப்பு">Broadcasting
-                        GPS</h4>
-                </div>
-                <div class="flex items-center gap-2 bg-blue-500/20 px-3 py-1 rounded-full">
-                    <span class="relative flex h-2 w-2">
-                        <span
-                            class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                        <span class="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
-                    </span>
-                    <span class="text-[10px] font-bold uppercase tracking-widest" data-en="Active"
-                        data-ta="செயலில்">Active</span>
-                </div>
-            </div>
-            <div class="grid grid-cols-2 gap-4">
-                <div class="bg-white/5 p-3 rounded-xl border border-white/5">
-                    <p class="text-[9px] font-bold text-gray-500 uppercase mb-1" data-en="Coordinates"
-                        data-ta="அச்சுத்தொலைவுகள்">Coordinates</p>
-                    <p class="text-sm font-mono font-medium" id="coords" data-en="Fetching..." data-ta="பெறுகிறது...">
-                        Fetching...</p>
-                </div>
-                <div class="bg-white/5 p-3 rounded-xl border border-white/5">
-                    <p class="text-[9px] font-bold text-gray-500 uppercase mb-1" data-en="Last Update"
-                        data-ta="கடைசி புதுப்பிப்பு">Last Update</p>
-                    <p class="text-sm font-medium" id="update-time" data-en="Just now" data-ta="இப்போதுதான்">Just now
-                    </p>
-                </div>
-            </div>
+        <div id="jobs-list" class="space-y-4">
+            <!-- Initial Skeletons -->
+            <div class="skeleton-dark h-32 w-full rounded-[24px]"></div>
+            <div class="skeleton-dark h-32 w-full rounded-[24px] opacity-50"></div>
         </div>
-
-    </main>
-
-    <!-- Global Loading Overlay -->
-    <div id="loading-overlay"
-        class="fixed inset-0 bg-white/80 backdrop-blur-sm z-[100] hidden flex-col items-center justify-center">
-        <div class="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"></div>
-        <p class="text-blue-600 font-bold" data-en="Updating Status..." data-ta="நிலையைப் புதுப்பிக்கிறது...">Updating
-            Status...</p>
     </div>
-</div>
+
+    <!-- ══ SCREEN: CHAT ══ -->
+    <div id="screen-chat" class="app-screen">
+        <div class="px-2 flex items-center gap-4 mb-4">
+            <button onclick="switchScreen('home')" class="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center active:scale-95 transition-all">
+                <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <div>
+                <h2 class="text-sm font-black text-white uppercase tracking-widest mb-0.5">Messages</h2>
+                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Direct chat with clients</p>
+            </div>
+        </div>
+        <div id="chats-list" class="bg-[#1f2937] rounded-[24px] border border-white/5 divide-y divide-white/5 overflow-hidden">
+             <!-- Initial Skeletons -->
+             <div class="skeleton-dark h-20 w-full"></div>
+             <div class="skeleton-dark h-20 w-full opacity-60"></div>
+             <div class="skeleton-dark h-20 w-full opacity-30"></div>
+        </div>
+    </div>
+
+    <!-- ══ SCREEN: WALLET ══ -->
+    <div id="screen-wallet" class="app-screen">
+        <div class="px-2 flex items-center gap-4 mb-4">
+            <button onclick="switchScreen('home')" class="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center active:scale-95 transition-all">
+                <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <div>
+                <h2 class="text-sm font-black text-white uppercase tracking-widest mb-0.5">Finance Hub</h2>
+                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Payouts & Earnings</p>
+            </div>
+        </div>
+        <div class="bg-black rounded-[2.5rem] p-8 border border-white/5 shadow-2xl relative overflow-hidden">
+            <div class="absolute -right-8 -top-8 w-32 h-32 bg-blue-600/10 rounded-full blur-3xl"></div>
+            <p class="text-[10px] font-black uppercase tracking-widest text-gray-500 mb-6">Net Earnings</p>
+            <div class="flex items-baseline gap-2 mb-8">
+                <span class="text-5xl font-black text-white">₹0.00</span>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="stat-card-dark text-center">
+                    <p class="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Pending</p>
+                    <p class="font-black text-white text-lg">₹0</p>
+                </div>
+                 <div class="stat-card-dark text-center">
+                    <p class="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Settled</p>
+                    <p class="font-black text-white text-lg">₹0</p>
+                </div>
+            </div>
+        </div>
+        <button class="btn-primary-blue w-full h-16 text-sm uppercase tracking-widest">Request Settlement</button>
+    </div>
+
+    <!-- ══ SCREEN: PLANS ══ -->
+    <div id="screen-plans" class="app-screen">
+        <div class="px-2 flex items-center gap-4 mb-4">
+            <button onclick="switchScreen('home')" class="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center active:scale-95 transition-all">
+                <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <div>
+                <h2 class="text-sm font-black text-white uppercase tracking-widest mb-0.5">Boost Packages</h2>
+                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Membership & Visibility Plans</p>
+            </div>
+        </div>
+        
+        <div class="space-y-4">
+            <div class="section-card relative border-blue-500/30 overflow-hidden">
+                <div class="absolute top-0 right-0 p-3">
+                    <span class="bg-blue-600 text-white text-[8px] font-black px-2 py-1 rounded-bl-xl uppercase tracking-widest">Popular</span>
+                </div>
+                <p class="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4">Premium Membership</p>
+                <div class="flex items-baseline gap-1 mb-6">
+                    <span class="text-4xl font-black text-white">₹199</span>
+                    <span class="text-xs text-gray-500 font-bold">/30 days</span>
+                </div>
+                <ul class="space-y-3 mb-8">
+                    <li class="flex items-center gap-3 text-xs text-gray-300 font-medium">✓ Guaranteed Top Position</li>
+                    <li class="flex items-center gap-3 text-xs text-gray-300 font-medium">✓ Golden Priority Badge</li>
+                </ul>
+                <button class="btn-primary-blue w-full h-14 text-xs">Buy Premium⚡</button>
+            </div>
+        </div>
+    </div>
+
+</main>
+
+
+    <!-- ══ WORKER CHAT SHEET (MODERN DARK) ══ -->
+
+    <!-- ══ WORKER CHAT SHEET (MODERN DARK) ══ -->
+    <div id="worker-chat-screen" class="fixed inset-0 z-[1100] flex flex-col bg-[#0f172a]" style="display:none">
+        <div class="flex items-center gap-4 px-5 py-4 border-b border-white/5 bg-[#111827]">
+            <button onclick="closeWorkerChat()" class="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center active:scale-90 transition-all">
+                <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <div id="wc-avatar" class="w-11 h-11 bg-blue-600 rounded-full flex items-center justify-center text-white font-black text-lg border border-white/10">U</div>
+            <div class="flex-1 min-w-0">
+                <p id="wc-name" class="font-black text-white text-base">Client</p>
+                <div id="wc-status-area">
+                    <p class="text-[10px] font-bold text-green-500 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 bg-green-500 rounded-full inline-block animate-pulse"></span>
+                        Online
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div id="wc-messages" class="flex-1 overflow-y-auto no-scrollbar px-5 py-4 space-y-3"></div>
+        <div class="p-4 border-t border-white/5 bg-[#0f172a] pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <div class="flex items-center gap-3 bg-white/5 rounded-2xl px-4 py-3 border border-white/10">
+                <input id="wc-input" type="text" placeholder="Message..." class="flex-1 bg-transparent text-sm font-bold text-white outline-none">
+                <button onclick="workerSendMessage()" class="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg active:scale-95 transition-all">
+                    <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/></svg>
+                </button>
+            </div>
+        </div>
+    </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    // Check Login
-    const workerId = localStorage.getItem('nearva_worker_id');
+    const workerId = localStorage.getItem('nearva_worker_id') || "{{ worker_id }}";
     if (!workerId) window.location.href = '/worker/login';
 
-    // State Manager
+    let socket = null;
+    let unreadChatCount = 0;
+    let unreadJobCount = 0;
+
     const state = {
         isLive: false,
+        isUpdating: false,
         watchId: null,
         heartbeatId: null,
-        isUpdating: false
+        currentScreen: 'home'
     };
 
-    function toggleLoading(show) {
-        state.isUpdating = show;
-        const toggle = document.getElementById('status-toggle');
-        if (toggle) toggle.disabled = show;
-        const hint = document.getElementById('save-hint');
-        if (hint) {
-            if (show) hint.classList.remove('hidden');
-            else hint.classList.add('hidden');
+    // ── NAVIGATION & SIDEBAR ──
+    function toggleSidebar(open) {
+        const sidebar = document.getElementById('dashboard-sidebar');
+        const overlay = document.getElementById('sidebar-overlay');
+        if (open) {
+            sidebar.style.transform = 'translateX(0)';
+            overlay.classList.remove('hidden');
+        } else {
+            sidebar.style.transform = 'translateX(-100%)';
+            overlay.classList.add('hidden');
         }
     }
 
-    async function logout() {
-        stopGPS();
-        localStorage.clear();
-        window.location.href = '/api/worker/logout';
+    function switchScreen(screenId) {
+        // App Screens
+        document.querySelectorAll('.app-screen').forEach(s => s.classList.remove('active'));
+        const target = document.getElementById(`screen-${screenId}`);
+        if (target) {
+            target.classList.add('active');
+            window.scrollTo(0, 0);
+        }
+
+        // Bottom Nav Icons
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        const navBtn = document.getElementById(`nav-${screenId}`);
+        if (navBtn) navBtn.classList.add('active');
+
+        state.currentScreen = screenId;
+        toggleSidebar(false);
     }
 
+    // ── STATUS TOGGLE ──
     async function handleToggleChange() {
         if (state.isUpdating) return;
-        const wantsOnline = document.getElementById('status-toggle').checked;
+        const toggle = document.getElementById('status-toggle');
+        const targetStatus = toggle.checked ? 'online' : 'offline';
+        const hint = document.getElementById('save-hint');
 
-        if (wantsOnline) {
-            requestGPSAndGoLive();
-        } else {
-            updateStatus('offline');
-        }
-    }
+        state.isUpdating = true;
+        if (hint) hint.classList.remove('hidden');
 
-    function requestGPSAndGoLive() {
-        if (!navigator.geolocation) {
-            alert("GPS not supported");
-            updateUI(false);
-            return;
-        }
-
-        toggleLoading(true);
-        navigator.geolocation.getCurrentPosition(
-            (pos) => updateStatus('online', pos.coords.latitude, pos.coords.longitude),
-            (err) => {
-                toggleLoading(false);
-                alert("Location access required to go online. Please enable GPS.");
-                updateUI(false);
-            },
-            { enableHighAccuracy: true, timeout: 10000 }
-        );
-    }
-
-    async function updateStatus(targetStatus, lat = null, lng = null) {
-        toggleLoading(true);
         try {
-            const response = await fetch('/api/worker/status', {
+            let lat = 0, lng = 0;
+            if (targetStatus === 'online') {
+                try {
+                    const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej));
+                    lat = pos.coords.latitude;
+                    lng = pos.coords.longitude;
+                } catch (e) {
+                    console.warn("Loc failed", e);
+                }
+            }
+
+            const res = await fetch('/api/worker/status', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    status: targetStatus,
-                    latitude: lat,
-                    longitude: lng
-                })
+                body: JSON.stringify({ status: targetStatus, latitude: lat, longitude: lng })
             });
 
-            if (!response.ok) throw new Error("Sync failed");
+            if (!res.ok) throw new Error("Sync failed");
 
-            state.isLive = (targetStatus === 'online');
+            state.isLive = toggle.checked;
             updateUI(state.isLive);
+            
+            if (state.isLive) startGPSWatch();
+            else stopGPS();
 
-            if (state.isLive) {
-                startGPSWatch();
-            } else {
-                stopGPS();
-            }
         } catch (err) {
-            alert("Network error: Status not updated. Try again.");
-            console.error(err);
-            updateUI(state.isLive);
+            showToast("Connection Error", "error");
+            toggle.checked = !toggle.checked;
         } finally {
-            toggleLoading(false);
+            state.isUpdating = false;
+            if (hint) hint.classList.add('hidden');
         }
     }
 
+    function updateUI(live) {
+        const visual = document.getElementById('status-visual');
+        const emoji = document.getElementById('status-emoji');
+        const header = document.getElementById('status-header');
+        const dot = document.getElementById('home-status-dot');
+        const toggle = document.getElementById('status-toggle');
+        const sideInd = document.getElementById('sidebar-status-status');
+        const headInd = document.getElementById('header-loc-indicator');
+        const liveDetails = document.getElementById('live-status-details');
+
+        if (live) {
+            if (visual) visual.className = "w-20 h-20 rounded-full mx-auto flex items-center justify-center mb-4 bg-blue-600/20 border-2 border-blue-500/30 scale-105 transition-all duration-500 shadow-[0_0_30px_rgba(37,99,235,0.2)]";
+            if (emoji) { emoji.textContent = '⚡'; emoji.className = "text-4xl animate-pulse"; }
+            if (header) { header.textContent = "You are Live"; header.className = "text-xl font-black text-blue-500 mb-1"; }
+            if (dot) dot.className = "absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-[#1f2937] rounded-full shadow-sm blink";
+            if (sideInd) { sideInd.textContent = "LIVE"; sideInd.className = "w-10 h-10 bg-emerald-500/10 rounded-xl border border-emerald-500/20 flex items-center justify-center text-[10px] font-black text-emerald-500"; }
+            if (headInd) { headInd.textContent = "LIVE"; headInd.className = "w-10 h-10 bg-emerald-500/10 rounded-xl border border-emerald-500/20 flex items-center justify-center text-[10px] font-black text-emerald-500 animate-pulse"; }
+            if (toggle) toggle.checked = true;
+            if (liveDetails) liveDetails.classList.remove('hidden');
+        } else {
+            if (visual) visual.className = "w-20 h-20 rounded-full mx-auto flex items-center justify-center mb-4 bg-white/5 border border-white/5 transition-all duration-500";
+            if (emoji) { emoji.textContent = '😴'; emoji.className = "text-4xl opacity-30 grayscale"; }
+            if (header) { header.textContent = "Go Live on Map"; header.className = "text-lg font-black text-white mb-1"; }
+            if (dot) dot.className = "absolute -bottom-1 -right-1 w-4 h-4 bg-gray-600 border-2 border-[#1f2937] rounded-full shadow-sm";
+            if (sideInd) { sideInd.textContent = "OFF"; sideInd.className = "w-10 h-10 bg-white/5 rounded-xl border border-white/5 flex items-center justify-center text-[10px] font-black text-gray-500"; }
+            if (headInd) { headInd.textContent = "OFF"; headInd.className = "w-10 h-10 bg-white/5 rounded-xl border border-white/5 flex items-center justify-center text-[10px] font-black text-gray-500"; }
+            if (toggle) toggle.checked = false;
+            if (liveDetails) liveDetails.classList.add('hidden');
+        }
+    }
+
+    // ── GPS LOGIC ──
     function startGPSWatch() {
-        stopGPS(); // Clean up if any
-        state.watchId = navigator.geolocation.watchPosition(
-            (pos) => {
-                const { latitude, longitude } = pos.coords;
-                updateGPSUI(latitude, longitude);
-                // Silently update location via POST
-                const fd = new FormData();
-                fd.append('id', workerId);
-                fd.append('latitude', latitude);
-                fd.append('longitude', longitude);
-                fd.append('availability', 'Available');
-                fetch('/api/worker/update', { method: 'POST', body: fd }).catch(() => { });
-            },
-            null,
-            { enableHighAccuracy: true, maximumAge: 0 }
-        );
+        stopGPS();
+        state.watchId = navigator.geolocation.watchPosition((pos) => {
+            const { latitude, longitude } = pos.coords;
+            
+            // Update display card if visible
+            const latEl = document.getElementById('display-lat');
+            const lngEl = document.getElementById('display-lng');
+            const timeEl = document.getElementById('display-last-active');
+            if (latEl) latEl.textContent = latitude.toFixed(5);
+            if (lngEl) lngEl.textContent = longitude.toFixed(5);
+            if (timeEl) timeEl.textContent = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+
+            const fd = new FormData();
+            fd.append('id', workerId);
+            fd.append('latitude', latitude);
+            fd.append('longitude', longitude);
+            fd.append('availability', 'Available');
+            fetch('/api/worker/update', { method: 'POST', body: fd }).catch(() => { });
+        }, null, { enableHighAccuracy: true, maximumAge: 0 });
 
         state.heartbeatId = setInterval(() => {
             const fd = new FormData();
@@ -304,60 +765,14 @@
     function stopGPS() {
         if (state.watchId) navigator.geolocation.clearWatch(state.watchId);
         if (state.heartbeatId) clearInterval(state.heartbeatId);
-        state.watchId = null;
+        state.watchId = null; 
         state.heartbeatId = null;
     }
 
-    function updateGPSUI(lat, lng) {
-        const coords = document.getElementById('coords');
-        const time = document.getElementById('update-time');
-        if (coords) coords.textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-        if (time) time.textContent = new Date().toLocaleTimeString();
-    }
-
-    function updateUI(live) {
-        const visual = document.getElementById('status-visual');
-        const emoji = document.getElementById('status-emoji');
-        const header = document.getElementById('status-header');
-        const subtext = document.getElementById('status-subtext');
-        const dot = document.getElementById('status-dot');
-        const gpsInfo = document.getElementById('gps-info');
-        const toggle = document.getElementById('status-toggle');
-
-        if (live) {
-            if (visual) visual.className = "w-32 h-32 rounded-full mx-auto flex items-center justify-center mb-6 bg-green-50 border-8 border-green-100 shadow-lg shadow-green-200 transition-all duration-700 scale-105";
-            if (emoji) {
-                emoji.textContent = '📡';
-                emoji.className = "text-5xl transition-all duration-700 animate-pulse";
-            }
-            if (header) {
-                header.textContent = "You are Live";
-                header.className = "text-2xl font-black text-green-600 mb-2";
-            }
-            if (subtext) subtext.textContent = "Customers can now see you on the Nearva map.";
-            if (dot) dot.className = "absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 border-4 border-white rounded-full shadow-sm blink";
-            if (gpsInfo) gpsInfo.classList.remove('hidden');
-            if (toggle) toggle.checked = true;
-        } else {
-            if (visual) visual.className = "w-32 h-32 rounded-full mx-auto flex items-center justify-center mb-6 bg-gray-50 border-8 border-gray-100 transition-all duration-700";
-            if (emoji) {
-                emoji.textContent = '😴';
-                emoji.className = "text-5xl grayscale opacity-30 transition-all duration-700";
-            }
-            if (header) {
-                header.textContent = "You are Hidden";
-                header.className = "text-2xl font-black text-gray-900 mb-2";
-            }
-            if (subtext) subtext.textContent = "Turn on GPS to appear on the Nearva map and receive requests.";
-            if (dot) dot.className = "absolute -bottom-1 -right-1 w-5 h-5 bg-gray-400 border-4 border-white rounded-full";
-            if (gpsInfo) gpsInfo.classList.add('hidden');
-            if (toggle) toggle.checked = false;
-        }
-    }
-
-    // Initialize
+    // ── INITIALIZATION ──
     document.addEventListener('DOMContentLoaded', () => {
-        // Fetch profile data to fill the Profile Card
+        switchScreen('home');
+
         fetch(`/api/worker/profile/${workerId}`)
             .then(res => res.json())
             .then(data => {
@@ -366,13 +781,7 @@
                     document.getElementById('worker-name-display').textContent = w.name;
                     document.getElementById('worker-service-display').textContent = w.service;
                     document.getElementById('worker-phone-display').textContent = w.phone;
-
-                    if (w.profile_photo) {
-                        document.getElementById('profile-card-avatar').src = w.profile_photo;
-                    } else {
-                        const avatarUrl = `https://ui-avatars.com/api/?name=${w.name.replace(' ', '+')}&background=random&color=fff`;
-                        document.getElementById('profile-card-avatar').src = avatarUrl;
-                    }
+                    if (w.profile_photo) document.getElementById('profile-card-avatar').src = w.profile_photo;
                 }
             }).catch(() => { });
 
@@ -380,19 +789,406 @@
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
-                    const { account_status, status } = data.worker;
-
-                    if (account_status !== 'Approved') {
-                        document.getElementById('status-card').classList.add('hidden');
-                        document.getElementById('pending-message').classList.remove('hidden');
-                        return;
-                    }
-
-                    state.isLive = (status === 'online');
+                    state.isLive = (data.worker.status === 'online');
                     updateUI(state.isLive);
                     if (state.isLive) startGPSWatch();
                 }
             });
+
+        pollData();
+        setInterval(pollData, 10000);
     });
+
+    // ── POLLING DATA ──
+    async function pollData() {
+        if (!workerId) return;
+        const res = await fetch(`/api/jobs/worker/${workerId}`).catch(()=>null);
+        if (!res || !res.ok) return;
+        const data = await res.json();
+        const jobs = data.jobs || [];
+
+        // Slight delay for smoother transition from skeleton to content
+        setTimeout(() => {
+            renderRequests(jobs.filter(j => j.status === 'pending'));
+            renderOngoingWork(jobs.filter(j => ['accepted','in_progress'].includes(j.status)));
+            loadWorkerInbox();
+        }, 300);
+    }
+
+    function renderRequests(pending) {
+        const list = document.getElementById('requests-list');
+        const dot = document.getElementById('nav-req-dot');
+        const badge = document.getElementById('req-badge-mini');
+        
+        if (dot) dot.classList.toggle('hidden', pending.length === 0);
+        if (badge) {
+            badge.textContent = `${pending.length} NEW`;
+            badge.classList.toggle('hidden', pending.length === 0);
+        }
+
+        if (!list) return;
+        if (pending.length === 0) {
+            list.innerHTML = `<div class="section-card py-12 flex flex-col items-center opacity-40">
+                <span class="text-4xl mb-4">📭</span>
+                <p class="text-[10px] font-black uppercase tracking-widest text-gray-500">No New Job Requests</p>
+            </div>`;
+            return;
+        }
+
+        list.innerHTML = pending.map(j => `
+            <div class="section-card slide-up">
+                <div class="flex items-center gap-4 mb-5">
+                    <div class="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-blue-600/20">${(j.user_phone||'U').slice(-1).toUpperCase()}</div>
+                    <div class="flex-1">
+                        <p class="font-black text-white text-base">${maskPhone(j.user_phone)}</p>
+                        <p class="text-[10px] font-black text-blue-400 uppercase tracking-widest">${j.service || 'Request'}</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <button onclick="acceptJob('${j.id}','${j.user_id}','${j.user_phone}')" class="h-14 bg-blue-600 rounded-2xl text-[11px] font-black text-white uppercase tracking-widest active:scale-95 transition-all">Accept Job</button>
+                    <button onclick="rejectJob('${j.id}')" class="h-14 bg-white/5 border border-white/10 rounded-2xl text-[11px] font-black text-gray-400 uppercase tracking-widest active:scale-95 transition-all">Dismiss</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function renderOngoingWork(active) {
+        const list = document.getElementById('jobs-list');
+        if (!list) return;
+        if (active.length === 0) {
+            list.innerHTML = `<div class="section-card py-12 flex flex-col items-center opacity-40">
+                <span class="text-4xl mb-4">🛠️</span>
+                <p class="text-[10px] font-black uppercase tracking-widest text-gray-500">No Active Work</p>
+            </div>`;
+            return;
+        }
+
+        list.innerHTML = active.map(j => {
+            const isProg = j.status === 'in_progress';
+            return `
+            <div class="section-card">
+                <div class="flex items-center gap-4 mb-5">
+                    <div class="w-12 h-12 bg-emerald-600/20 rounded-2xl flex items-center justify-center text-emerald-500 font-black text-xl">${isProg?'▶':'✓'}</div>
+                    <div class="flex-1">
+                        <p class="font-black text-white text-base">${maskPhone(j.user_phone)}</p>
+                        <p class="text-[10px] font-black text-emerald-400 uppercase tracking-widest">
+                            ${j.status === 'in_progress' ? 'Work in Progress' : (j.status === 'accepted' ? 'Worker Accepted' : j.status.replace('_',' '))}
+                        </p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    ${!isProg ? `<button onclick="updateJobStatus('${j.id}','in_progress')" class="h-14 bg-blue-600 rounded-2xl text-[11px] font-black text-white uppercase tracking-widest active:scale-95">Start Work</button>` : ''}
+                    ${isProg  ? `<button onclick="updateJobStatus('${j.id}','completed')" class="h-14 bg-emerald-600 rounded-2xl text-[11px] font-black text-white uppercase tracking-widest active:scale-95">Complete</button>` : ''}
+                    <button onclick="openWorkerChat('user_${j.user_id}_worker_${workerId}','${j.user_phone}')" class="h-14 bg-white/5 border border-white/10 rounded-2xl text-[11px] font-black text-gray-400 uppercase tracking-widest active:scale-95">Message</button>
+                </div>
+            </div>
+        `}).join('');
+    }
+
+    async function loadWorkerInbox() {
+        const res = await fetch(`/api/chats/worker/${workerId}`).catch(()=>null);
+        if (!res || !res.ok) return;
+        const data = await res.json();
+        const chats = data.chats || [];
+        const list = document.getElementById('chats-list');
+        const badge = document.getElementById('nav-chat-badge');
+        
+        if (badge) {
+            badge.textContent = chats.length;
+            badge.classList.toggle('hidden', chats.length === 0);
+        }
+        if (!list) return;
+
+        if (chats.length === 0) {
+            list.innerHTML = `<div class="py-24 text-center opacity-40"><span class="text-4xl">💬</span><p class="text-[10px] font-black uppercase tracking-widest text-gray-500 mt-4">No recent messages</p></div>`;
+            return;
+        }
+
+        list.innerHTML = chats.map(c => `
+        <button onclick="openWorkerChat('${c.chat_id}','${c.user_phone}')" class="w-full flex items-center gap-4 p-5 text-left border-b border-white/5 last:border-0 active:bg-white/5 transition-all">
+            <div class="w-12 h-12 bg-blue-500/10 rounded-full flex items-center justify-center text-blue-500 font-extrabold text-lg">${(c.user_phone||'U').slice(-1).toUpperCase()}</div>
+            <div class="flex-1 min-w-0">
+                <div class="flex justify-between items-baseline mb-1">
+                    <p class="font-black text-white text-sm">${maskPhone(c.user_phone)}</p>
+                    <p class="text-[9px] font-bold text-gray-600">${new Date(c.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</p>
+                </div>
+                <p class="text-xs text-gray-500 truncate font-medium">${c.message}</p>
+            </div>
+        </button>
+        `).join('');
+    }
+
+    // ── CHAT SCREEN LOGIC ──
+    let currentChatId = null;
+    let typingTimeout = null;
+
+    function openWorkerChat(chatId, phone) {
+        currentChatId = chatId;
+        document.getElementById('wc-name').textContent = maskPhone(phone);
+        document.getElementById('worker-chat-screen').classList.add('active');
+        document.getElementById('worker-chat-screen').style.display = 'flex';
+        loadMessages();
+        if (socket) {
+            socket.emit('join-room', { roomId: currentChatId });
+            console.log("Joined room:", currentChatId);
+        }
+    }
+
+    function closeWorkerChat() {
+        if (socket && currentChatId) {
+            socket.emit('leave', { roomId: currentChatId });
+        }
+        document.getElementById('worker-chat-screen').classList.remove('active');
+        document.getElementById('worker-chat-screen').style.display = 'none';
+        currentChatId = null;
+    }
+    // Register for global back button
+    window.closeCurrentScreen = () => {
+        const chatScreen = document.getElementById('worker-chat-screen');
+        if (chatScreen && chatScreen.classList.contains('active')) {
+            closeWorkerChat();
+            return true;
+        }
+        return false;
+    };
+
+    async function loadMessages() {
+        if (!currentChatId) return;
+        const res = await fetch(`/api/messages/${currentChatId}`).catch(()=>null);
+        if (!res || !res.ok) return;
+        const data = await res.json();
+        const msgs = data.messages || [];
+        const container = document.getElementById('wc-messages');
+        if (!container) return;
+        
+        container.innerHTML = msgs.map(m => {
+            const isWorker = m.sender_type === 'worker';
+            return `<div class="flex ${isWorker?'justify-end':''} mb-3" id="msg-${m.id}">
+                <div class="${isWorker?'bubble-worker shadow-lg shadow-blue-500/10':'bubble-user border border-white/5'} px-4 py-3 max-w-[80%] group">
+                    ${isWorker ? `<button onclick="deleteMessage('${m.id}')" class="delete-msg-btn">✕</button>` : ''}
+                    <p class="text-xs font-bold leading-relaxed">${escapeHtml(m.message)}</p>
+                </div>
+            </div>`;
+        }).join('');
+        container.scrollTop = container.scrollHeight;
+    }
+
+    async function workerSendMessage() {
+        const input = document.getElementById('wc-input');
+        const msg = input.value.trim();
+        if (!msg || !currentChatId) return;
+        input.value = '';
+        
+        // Optimistic Update: Append locally immediately
+        const tempId = 'temp_' + Date.now();
+        appendLiveMessage({
+            id: tempId,
+            roomId: currentChatId,
+            sender_id: workerId,
+            sender_type: 'worker',
+            message: msg
+        });
+
+        emitTypingStatus(false);
+        console.log("Message sent:", msg);
+
+        // Real-time bypass
+        if (socket) {
+            socket.emit('send-message', {
+                roomId: currentChatId,
+                senderId: workerId,
+                senderType: 'worker',
+                message: msg
+            });
+        }
+
+        try {
+            const res = await fetch('/api/messages/send', {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ chat_id:currentChatId, sender_id:workerId, sender_type:'worker', message:msg })
+            });
+            const data = await res.json();
+            
+            // Update temp ID with real ID from server
+            if (data.status === 'success' && data.data) {
+                const tempEl = document.getElementById(`msg-${tempId}`);
+                if (tempEl) {
+                    tempEl.id = `msg-${data.data.id}`;
+                    const deleteBtn = tempEl.querySelector('.delete-msg-btn');
+                    if (deleteBtn) deleteBtn.onclick = () => deleteMessage(data.data.id);
+                }
+            }
+        } catch(e) { console.error("Send failed", e); }
+    }
+
+    async function deleteMessage(msgId) {
+        if (!confirm('Delete this message?')) return;
+        
+        // Optimistic delete
+        const el = document.getElementById(`msg-${msgId}`);
+        if (el) el.remove();
+
+        // Notify socket
+        if (socket && currentChatId) {
+            socket.emit('delete-message', { roomId: currentChatId, messageId: msgId });
+        }
+
+        // Delete from DB
+        await fetch(`/api/messages/${msgId}`, { method: 'DELETE' }).catch(() => null);
+    }
+
+    function emitTypingStatus(isTyping) {
+        if (socket && currentChatId) {
+            socket.emit('typing', { roomId: currentChatId, typing: isTyping });
+        }
+    }
+
+    function maskPhone(ph) { if (!ph) return 'User'; const c = ph.replace(/\D/g,''); return '********' + c.slice(-2); }
+    function showToast(msg, type='') {
+        const t = document.getElementById('wtoast');
+        if (!t) return;
+        t.innerText = msg;
+        t.className = 'show' + (type==='error'?' error':'');
+        setTimeout(()=> t.className = '', 3000);
+    }
+    async function acceptJob(id, uid, ph) {
+        await fetch(`/api/jobs/${id}/status`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status:'accepted'}) });
+        showToast('Accepted! ✅');
+        pollData();
+        openWorkerChat(`user_${uid}_worker_${workerId}`, ph);
+    }
+    async function rejectJob(id) {
+        await fetch(`/api/jobs/${id}/status`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status:'rejected'}) });
+        showToast('Dismissed');
+        pollData();
+    }
+    async function updateJobStatus(id, stat) {
+        await fetch(`/api/jobs/${id}/status`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status:stat}) });
+        showToast('Updated');
+        pollData();
+    }
+
+    // ── SOCKET.IO LOGIC ──
+    function initSocket() {
+        socket = io({
+            path: '/socket.io',
+            transports: ['polling']
+        });
+
+        socket.on('connect', () => {
+            console.log('Connected');
+            // Join personal room for worker notifications
+            socket.emit('join', { user_id: workerId });
+            // Join active chat if one is open
+            if (currentChatId) {
+                socket.emit('join-room', { roomId: currentChatId });
+                console.log("Joined room:", currentChatId);
+            }
+        });
+
+        socket.on('receive-message', (data) => {
+            console.log("Message received:", data);
+            if (currentChatId === data.roomId && data.sender_id !== workerId) {
+                appendLiveMessage(data);
+            }
+        });
+
+        socket.on('message-deleted', (data) => {
+            console.log("Message deleted:", data);
+            if (currentChatId === data.roomId) {
+                const el = document.getElementById(`msg-${data.messageId}`);
+                if (el) el.remove();
+            }
+        });
+
+        socket.on('notify_message', (data) => {
+            console.log("Notification received:", data);
+            if (currentChatId !== data.roomId) {
+                unreadChatCount++;
+                updateUnreadBadges();
+            }
+            loadWorkerInbox();
+        });
+
+        socket.on('new_job', (data) => {
+            unreadJobCount++;
+            updateUnreadBadges();
+            pollData(); // Refresh lists
+            showToast("New Job Request! ⚡", "success");
+        });
+
+        socket.on('typing-status', (data) => {
+            if (currentChatId === data.roomId) {
+                const statusArea = document.getElementById('wc-status-area');
+                if (!statusArea) return;
+                
+                if (data.typing) {
+                  statusArea.innerHTML = `<p class="text-[10px] font-bold text-blue-400 animate-pulse">Typing...</p>`;
+                } else {
+                    statusArea.innerHTML = `<p class="text-[10px] font-bold text-green-500 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 bg-green-500 rounded-full inline-block"></span>
+                        Online
+                    </p>`;
+                }
+            }
+        });
+    }
+
+    function appendLiveMessage(m) {
+        const container = document.getElementById('wc-messages');
+        if (!container) return;
+        const isWorker = m.sender_type === 'worker';
+        const div = document.createElement('div');
+        div.className = `flex ${isWorker?'justify-end':''} mb-3`;
+        div.id = `msg-${m.id}`;
+
+        div.innerHTML = `<div class="${isWorker?'bubble-worker shadow-lg shadow-blue-500/10':'bubble-user border border-white/5'} px-4 py-3 max-w-[80%] group relative">
+            ${isWorker ? `<button onclick="deleteMessage('${m.id}')" class="delete-msg-btn">✕</button>` : ''}
+            <p class="text-xs font-bold leading-relaxed">${escapeHtml(m.message)}</p>
+        </div>`;
+        container.appendChild(div);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function updateUnreadBadges() {
+        const chatBadge = document.getElementById('nav-chat-badge');
+        const reqBadge = document.getElementById('nav-req-badge');
+        if (chatBadge) {
+            chatBadge.textContent = unreadChatCount;
+            chatBadge.classList.toggle('hidden', unreadChatCount === 0);
+        }
+        if (reqBadge) {
+            reqBadge.textContent = unreadJobCount;
+            reqBadge.classList.toggle('hidden', unreadJobCount === 0);
+        }
+    }
+
+    function escapeHtml(t) {
+        return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+    }
+
+    // Wrap initialization
+    const originalInit = document.addEventListener('DOMContentLoaded', () => {}); // placeholder
+    document.addEventListener('DOMContentLoaded', () => {
+        // ... (rest of init)
+        initSocket();
+        
+        const input = document.getElementById('wc-input');
+        if (input) {
+            input.addEventListener('input', () => {
+                emitTypingStatus(true);
+                clearTimeout(typingTimeout);
+                typingTimeout = setTimeout(() => emitTypingStatus(false), 2000);
+            });
+        }
+    });
+
+    const originalSwitchScreen = switchScreen;
+    switchScreen = function(sid) {
+        originalSwitchScreen(sid);
+        if (sid === 'chat') { unreadChatCount = 0; updateUnreadBadges(); }
+        if (sid === 'requests') { unreadJobCount = 0; updateUnreadBadges(); }
+    }
 </script>
 {% endblock %}
