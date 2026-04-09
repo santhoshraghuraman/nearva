@@ -552,7 +552,11 @@
             const data = await response.json();
 
             if (response.ok && data.status === 'success') {
-                showWhatsAppModal(data.worker);
+                if (data.worker_id) {
+                    window.location.href = '/verify?worker_id=' + data.worker_id;
+                } else {
+                    showWhatsAppModal(data.worker);
+                }
             } else {
                 showToast(data.message || 'An error occurred during registration. Please try again.', 'error');
                 submitBtn.innerHTML = originalBtnText;

@@ -69,6 +69,23 @@ async def handle_join(sid, data):
     user_id = data.get('user_id') # Personal notification room
     if user_id:
         sio.enter_room(sid, str(user_id))
+    
+    # Check for admin room join
+    if data.get('is_admin') is True:
+        sio.enter_room(sid, 'admin_room')
+        print(f"Admin joined: {sid}")
+
+async def broadcast_event(room: str, event_type: str, data: dict = None):
+    """Universal event dispatcher for real-time synchronization."""
+    await sio.emit('system_event', {
+        'type': event_type,
+        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'data': data or {}
+    }, room=room)
+
+async def notify_admin(event_type: str, data: dict = None):
+    """Broadcast an update to all connected admins."""
+    await broadcast_event('admin_room', event_type, data)
 
 @sio.on('leave')
 async def handle_leave(sid, data):
@@ -173,8 +190,8 @@ async def read_root(request: Request):
 @app.get("/api/workers")
 async def get_workers(category: str = "All", lat: float = None, lng: float = None):
     # Master Optimization: Fetch ONLY minimum required fields for map rendering
-    fields = "id,name,phone,service,experience,area,latitude,longitude,is_online,last_active,profile_photo,ambassadors(name)"
-    query = f"workers?account_status=eq.Approved&latitude=not.is.null&longitude=not.is.null&select={fields}"
+    fields = "id,name,phone,service,experience,area,latitude,longitude,is_online,last_active,profile_photo,verification_status,ambassadors(name)"
+    query = f"workers?verification_status=eq.VERIFIED&latitude=not.is.null&longitude=not.is.null&select={fields}"
     
     # 1. Category Filtering
     if category != "All":
@@ -237,6 +254,13 @@ async def register_page(request: Request):
         return RedirectResponse(url="/worker/dashboard")
     return templates.TemplateResponse(request=request, name="register.html")
 
+@app.get("/verify", response_class=HTMLResponse)
+async def verify_page(request: Request, worker_id: str = None):
+    # Verify page requires a worker_id in the query parameter to map the uploaded photos to the correct worker
+    if not worker_id:
+        return RedirectResponse(url="/register")
+    return templates.TemplateResponse(request=request, name="verify.html", context={"worker_id": worker_id})
+
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request):
     is_logged_in = request.session.get("admin_logged_in", False)
@@ -289,18 +313,17 @@ async def send_message(request: Request):
     msg_data = res_json[0] if isinstance(res_json, list) else res_json
 
     # Real-time Broadcast to the Room
-    await sio.emit("receive-message", {
+    await broadcast_event(chat_id, "receive-message", {
         "roomId": chat_id,
         "sender_id": sender_id,
         "sender_type": sender_type,
         "message": message,
         "created_at": msg_data.get("created_at")
-    }, room=chat_id)
+    })
 
     # Real-time Notification to Recipient (for badges)
-    # Recipient is user_id if worker sent, or worker_id if user sent
     recipient_id = chat_id.split("_worker_")[1] if sender_type == "user" else chat_id.split("_worker_")[0].replace("user_", "")
-    await sio.emit("notify_message", {"roomId": chat_id, "message": message}, room=str(recipient_id))
+    await broadcast_event(str(recipient_id), "notify_message", {"roomId": chat_id, "message": message})
 
     return JSONResponse({"status": "success", "data": msg_data})
 
@@ -414,8 +437,9 @@ async def create_job_request(request: Request):
     })
     job_data = res.json()[0] if isinstance(res.json(), list) else res.json()
 
-    # Real-time Notification to Worker
-    await sio.emit("new_job", job_data, room=f"worker_{worker_id}")
+    # Real-time Notification to Worker & Admin
+    await broadcast_event(f"worker_{worker_id}", "new_job", job_data)
+    await notify_admin("job_created", job_data)
 
     return JSONResponse({"status": "success", "job": job_data})
 
@@ -471,12 +495,21 @@ async def update_job_status(job_id: str, request: Request):
     })
     job_data = res.json()[0] if isinstance(res.json(), list) else res.json()
 
-    # Real-time Notification to User
-    # We need user_id from the job record
-    full_job_res = await supabase_request("GET", f"job_requests?id=eq.{job_id}&select=user_id")
-    if full_job_res.json():
-        target_user_id = full_job_res.json()[0].get("user_id")
-        await sio.emit("job_updated", {"job_id": job_id, "status": new_status}, room=f"user_{target_user_id}")
+    # Real-time Synchronization to all parties
+    job_info_res = await supabase_request("GET", f"job_requests?id=eq.{job_id}&select=user_id,worker_id")
+    if job_info_res.is_success and job_info_res.json():
+        info = job_info_res.json()[0]
+        uid = info.get("user_id")
+        wid = info.get("worker_id")
+        
+        # Notify User
+        await broadcast_event(f"user_{uid}", "job_updated", {"job_id": job_id, "status": new_status})
+        # Notify Worker (to sync dashboard state instantly)
+        await broadcast_event(f"worker_{wid}", "job_state_changed", {"job_id": job_id, "status": new_status})
+        
+        # Notify admin of key job events (completed)
+        if new_status == 'completed':
+            await notify_admin('job_completed', {"id": job_id, "status": new_status})
 
     return JSONResponse({"status": "success", "job": job_data})
 
@@ -611,7 +644,8 @@ async def register_worker(
         "rating_avg": 4.5,
         "review_count": 0,
         "is_verified": False,
-        "completed_jobs": 0
+        "completed_jobs": 0,
+        "verification_status": "PENDING"
     }
     
     if ambassador_id:
@@ -647,8 +681,14 @@ async def register_worker(
         print(f"Supabase Error: {result.status_code} - {result.text}")
         return JSONResponse({"status": "error", "message": "Database error occurred. Please ensure DB migration is run."}, status_code=500)
         
+    inserted_data = result.json()
+    worker_id = inserted_data[0].get("id") if isinstance(inserted_data, list) and len(inserted_data) > 0 else None
+
+    await notify_admin('worker_created', inserted_data[0] if isinstance(inserted_data, list) else inserted_data)
+
     return JSONResponse({
         "status": "success", 
+        "worker_id": worker_id,
         "worker": {
             "name": name,
             "service": service,
@@ -658,6 +698,61 @@ async def register_worker(
             "ambassador_phone": ambassador_phone
         }
     })
+
+import asyncio
+
+@app.post("/api/verify/submit")
+async def handle_verification_submit(request: Request):
+    try:
+        body = await request.json()
+        worker_id = body.get("worker_id")
+        id_front = body.get("id_front")
+        id_back = body.get("id_back")
+        selfie = body.get("selfie")
+        
+        if not all([worker_id, id_front, id_back, selfie]):
+            return JSONResponse({"status": "error", "message": "Missing images or worker ID."}, status_code=400)
+            
+        print(f"[{worker_id}] Starting verification upload to Cloudinary...")
+        
+        # Parallel upload using asyncio.to_thread since cloudinary.uploader.upload is synchronous
+        loop = asyncio.get_event_loop()
+        upload_tasks = [
+            loop.run_in_executor(None, lambda: cloudinary.uploader.upload(id_front, folder=f"nearva/verification/{worker_id}")),
+            loop.run_in_executor(None, lambda: cloudinary.uploader.upload(id_back, folder=f"nearva/verification/{worker_id}")),
+            loop.run_in_executor(None, lambda: cloudinary.uploader.upload(selfie, folder=f"nearva/verification/{worker_id}"))
+        ]
+        results = await asyncio.gather(*upload_tasks)
+        
+        id_front_url = results[0].get("secure_url")
+        id_back_url = results[1].get("secure_url")
+        selfie_url = results[2].get("secure_url")
+        
+        # Insert into verifications table
+        verification_data = {
+            "worker_id": worker_id,
+            "id_front_url": id_front_url,
+            "id_back_url": id_back_url,
+            "selfie_url": selfie_url,
+            "status": "UNDER_REVIEW"
+        }
+        v_res = await supabase_request("POST", "verifications", data=verification_data)
+        if not v_res.is_success:
+            print(f"Supabase error inserting verification: {v_res.text}")
+            return JSONResponse({"status": "error", "message": "Failed to save verification record."}, status_code=500)
+            
+        # Update worker verification_status
+        w_res = await supabase_request("PATCH", f"workers?id=eq.{worker_id}", data={"verification_status": "UNDER_REVIEW"})
+        if not w_res.is_success:
+            print(f"Supabase error updating worker status: {w_res.text}")
+        
+        await notify_admin('worker_updated', {"id": worker_id, "verification_status": "UNDER_REVIEW"})
+            
+        return JSONResponse({"status": "success", "message": "Verification submitted successfully."})
+        
+    except Exception as e:
+        print(f"Error handling verification submit: {e}")
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
 
 # --- Admin API ---
 
@@ -682,16 +777,19 @@ async def get_all_workers():
 @app.post("/api/admin/approve/{worker_id}")
 async def approve_worker(worker_id: str):
     await supabase_request("PATCH", f"workers?id=eq.{worker_id}", data={"account_status": "Approved"})
+    await notify_admin('worker_updated', {"id": worker_id, "account_status": "Approved"})
     return {"status": "success"}
 
 @app.post("/api/admin/reject/{worker_id}")
 async def reject_worker(worker_id: str):
     await supabase_request("PATCH", f"workers?id=eq.{worker_id}", data={"account_status": "Rejected"})
+    await notify_admin('worker_updated', {"id": worker_id, "account_status": "Rejected"})
     return {"status": "success"}
 
 @app.delete("/api/admin/delete/{worker_id}")
 async def delete_worker(worker_id: str):
     await supabase_request("DELETE", f"workers?id=eq.{worker_id}")
+    await notify_admin('worker_deleted', {"id": worker_id})
     return {"status": "success"}
 
 @app.post("/api/admin/toggle_availability/{worker_id}")
@@ -1034,11 +1132,12 @@ async def user_verify_widget_token(request: Request):
             user = existing_users[0]
             now_iso = datetime.now(timezone.utc).isoformat()
             await supabase_request("PATCH", f"users?id=eq.{user['id']}", data={"last_login": now_iso})
-            print(f"✅ Existing user logged in via Widget: {phone}")
+            print(f"[SUCCESS] Existing user logged in via Widget: {phone}")
         else:
             create_res = await supabase_request("POST", "users", data={"phone": phone})
             user = create_res.json()[0]
-            print(f"✅ New user registered via Widget: {phone}")
+            print(f"[SUCCESS] New user registered via Widget: {phone}")
+            await notify_admin('user_created', user)
 
         request.session["user_id"] = user["id"]
         request.session["user_phone"] = phone
@@ -1073,7 +1172,7 @@ async def user_send_otp(request: Request):
         DEV_OTP_STORE[phone] = {"otp": otp, "expires_at": expiry}
         
         print("\n" + "="*50)
-        print(f"🔑 DEV MODE OTP for +91{phone}: {otp}")
+        print(f"[OTP] DEV MODE OTP for +91{phone}: {otp}")
         print("="*50 + "\n")
         
         return JSONResponse({"status": "success", "message": "OTP generated (Dev Mode)."})
@@ -1095,14 +1194,14 @@ async def user_send_otp(request: Request):
         result = res.json()
         
         if result.get("type") == "success":
-            print(f"✅ OTP sent successfully via MSG91 to {phone}")
+            print(f"[SUCCESS] OTP sent successfully via MSG91 to {phone}")
             return JSONResponse({"status": "success", "message": "OTP sent successfully."})
         else:
-            print(f"❌ MSG91 Send OTP Error: {result.get('message')}")
+            print(f"[ERROR] MSG91 Send OTP Error: {result.get('message')}")
             raise HTTPException(status_code=502, detail=f"Failed to send OTP: {result.get('message')}")
             
     except Exception as e:
-        print(f"❌ Connection error sending OTP: {str(e)}")
+        print(f"[ERROR] Connection error sending OTP: {str(e)}")
         raise HTTPException(status_code=503, detail="OTP service currently unavailable.")
 
 
@@ -1128,7 +1227,7 @@ async def user_verify_otp(request: Request):
     }
     
     if phone in TEST_ACCOUNTS and TEST_ACCOUNTS[phone] == otp:
-        print(f"🔐 TEST ACCOUNT BYPASS: {phone} logged in with {otp}")
+        print(f"[BYPASS] TEST ACCOUNT BYPASS: {phone} logged in with {otp}")
         check_res = await supabase_request("GET", f"users?phone=eq.{phone}&select=id,phone")
         existing_users = check_res.json()
         if existing_users:
@@ -1137,6 +1236,7 @@ async def user_verify_otp(request: Request):
         else:
             create_res = await supabase_request("POST", "users", data={"phone": phone})
             user = create_res.json()[0]
+            await notify_admin('user_created', user)
 
         request.session["user_id"] = user["id"]
         request.session["user_phone"] = phone
@@ -1155,7 +1255,7 @@ async def user_verify_otp(request: Request):
             raise HTTPException(status_code=401, detail="OTP expired. Request a new one.")
         
         DEV_OTP_STORE.pop(phone, None)
-        print(f"✅ DEV MODE: OTP verified for {phone}")
+        print(f"[SUCCESS] DEV MODE: OTP verified for {phone}")
         
         check_res = await supabase_request("GET", f"users?phone=eq.{phone}&select=id,phone")
         existing_users = check_res.json()
@@ -1165,6 +1265,7 @@ async def user_verify_otp(request: Request):
         else:
             create_res = await supabase_request("POST", "users", data={"phone": phone})
             user = create_res.json()[0]
+            await notify_admin('user_created', user)
 
         request.session["user_id"] = user["id"]
         request.session["user_phone"] = phone
@@ -1182,7 +1283,7 @@ async def user_verify_otp(request: Request):
         result = res.json()
         
         if result.get("type") != "success":
-            print(f"❌ OTP Verify Error: {result.get('message')}")
+            print(f"[ERROR] OTP Verify Error: {result.get('message')}")
             raise HTTPException(status_code=401, detail=result.get("message", "Invalid or expired OTP."))
 
         check_res = await supabase_request("GET", f"users?phone=eq.{phone}&select=id,phone")
@@ -1191,11 +1292,12 @@ async def user_verify_otp(request: Request):
         if existing_users:
             user = existing_users[0]
             await supabase_request("PATCH", f"users?id=eq.{user['id']}", data={"last_login": datetime.now(timezone.utc).isoformat()})
-            print(f"✅ Existing user logged in via real OTP: {phone}")
+            print(f"[SUCCESS] Existing user logged in via real OTP: {phone}")
         else:
             create_res = await supabase_request("POST", "users", data={"phone": phone})
             user = create_res.json()[0]
-            print(f"✅ New user registered via real OTP: {phone}")
+            print(f"[SUCCESS] New user registered via real OTP: {phone}")
+            await notify_admin('user_created', user)
 
         request.session["user_id"] = user["id"]
         request.session["user_phone"] = phone
@@ -1203,7 +1305,7 @@ async def user_verify_otp(request: Request):
 
     except Exception as e:
         if isinstance(e, HTTPException): raise e
-        print(f"❌ Unexpected verification error: {str(e)}")
+        print(f"[ERROR] Unexpected verification error: {str(e)}")
         raise HTTPException(status_code=500, detail="Authentication failed. Please try again.")
 
     finally:
@@ -1269,6 +1371,8 @@ async def update_worker_status(request: Request):
 
     print(f"LOG: Worker {session_worker_id} is now {'ONLINE' if is_online else 'OFFLINE'} at {now_iso}")
     
+    await notify_admin('worker_updated', {"id": session_worker_id, "is_online": is_online, "status": new_status})
+    
     return {
         "status": "success",
         "is_online": is_online,
@@ -1280,7 +1384,7 @@ async def get_worker_status(worker_id: str, request: Request):
     session_worker_id = request.session.get("worker_id")
     if not session_worker_id or session_worker_id != worker_id:
         return JSONResponse({"status": "error", "message": "Unauthorized access."}, status_code=403)
-    response = await supabase_request("GET", f"workers?id=eq.{worker_id}&select=account_status,name,status,last_status_update,is_online,last_active")
+    response = await supabase_request("GET", f"workers?id=eq.{worker_id}&select=verification_status,account_status,name,status,last_status_update,is_online,last_active")
     workers = response.json()
     
     if workers:
@@ -1325,14 +1429,14 @@ async def _supabase_admin_patch(endpoint: str, data: dict):
     """PATCH using service-role headers that bypass all RLS."""
     url = f"{SUPABASE_URL}/rest/v1/{endpoint}"
     resp = await http_client.request("PATCH", url, headers=_admin_headers(), json=data)
-    print(f"[ADMIN PATCH] {endpoint} → {resp.status_code} | {resp.text[:200]}")
+    print(f"[ADMIN PATCH] {endpoint} -> {resp.status_code} | {resp.text[:200]}")
     return resp
 
 async def _supabase_admin_post(endpoint: str, data: dict):
     """POST using service-role headers that bypass all RLS."""
     url = f"{SUPABASE_URL}/rest/v1/{endpoint}"
     resp = await http_client.request("POST", url, headers=_admin_headers(), json=data)
-    print(f"[ADMIN POST] {endpoint} → {resp.status_code} | {resp.text[:200]}")
+    print(f"[ADMIN POST] {endpoint} -> {resp.status_code} | {resp.text[:200]}")
     return resp
 
 
@@ -1407,7 +1511,7 @@ async def ambassador_get_workers(request: Request):
     if not ambassador_id:
         return JSONResponse({"error": "Unauthorized"}, status_code=401)
     resp = await supabase_request("GET",
-        f"workers?ambassador_id=eq.{ambassador_id}&select=id,name,phone,service,area,account_status,profile_photo,created_at&order=created_at.desc")
+        f"workers?ambassador_id=eq.{ambassador_id}&select=id,name,phone,service,area,account_status,verification_status,profile_photo,created_at&order=created_at.desc")
     workers = resp.json() if resp.is_success else []
     return JSONResponse({"status": "success", "workers": workers})
 
@@ -1420,14 +1524,17 @@ async def ambassador_get_stats(request: Request):
         f"workers?ambassador_id=eq.{ambassador_id}&select=account_status")
     workers = resp.json() if resp.is_success else []
     total    = len(workers)
-    approved = sum(1 for w in workers if w.get("account_status") == "Approved")
-    pending  = sum(1 for w in workers if w.get("account_status") == "Pending")
-    rejected = sum(1 for w in workers if w.get("account_status") == "Rejected")
+    verified = sum(1 for w in workers if w.get("verification_status") == "VERIFIED")
+    review   = sum(1 for w in workers if w.get("verification_status") == "UNDER_REVIEW")
+    pending  = sum(1 for w in workers if w.get("verification_status") == "PENDING")
+    rejected = sum(1 for w in workers if w.get("verification_status") == "REJECTED")
+    
     return JSONResponse({
         "status": "success",
         "total_workers":    total,
-        "approved_workers": approved,
+        "approved_workers": verified,
         "pending_workers":  pending,
+        "review_workers":   review,
         "rejected_workers": rejected
     })
 
@@ -1452,7 +1559,7 @@ async def _ambassador_set_status(worker_id: str, new_status: str, request: Reque
                 print(f"[AMB ACTION] DENIED: worker {worker_id} belongs to different ambassador {existing_amb}")
                 return JSONResponse({"status": "error", "message": "This worker is not assigned to you"}, status_code=403)
             # Worker exists but has no ambassador_id (pre-migration) — claim + update
-            print(f"[AMB ACTION] Pre-migration worker {worker_id} — linking to ambassador {ambassador_id}")
+            print(f"[AMB ACTION] Pre-migration worker {worker_id} - linking to ambassador {ambassador_id}")
             await supabase_request("PATCH", f"workers?id=eq.{worker_id}",
                 data={"ambassador_id": ambassador_id})
         else:
@@ -1465,7 +1572,7 @@ async def _ambassador_set_status(worker_id: str, new_status: str, request: Reque
         print(f"[AMB ACTION] DB PATCH failed for worker {worker_id}: {result.status_code} {result.text[:80]}")
         return JSONResponse({"status": "error", "message": "Database update failed"}, status_code=500)
 
-    print(f"[AMB ACTION] Worker {worker_id} → {new_status} by ambassador {ambassador_id}")
+    print(f"[AMB ACTION] Worker {worker_id} -> {new_status} by ambassador {ambassador_id}")
     return JSONResponse({"status": "success", "account_status": new_status})
 
 @app.post("/api/ambassador/approve/{worker_id}")
@@ -1475,6 +1582,51 @@ async def ambassador_approve_worker(worker_id: str, request: Request):
 @app.post("/api/ambassador/reject/{worker_id}")
 async def ambassador_reject_worker(worker_id: str, request: Request):
     return await _ambassador_set_status(worker_id, "Rejected", request)
+
+@app.get("/api/ambassador/verification/{worker_id}")
+async def get_worker_verification(worker_id: str, request: Request):
+    if not request.session.get("ambassador_id"):
+        return JSONResponse({"status": "error", "message": "Unauthorized"}, status_code=401)
+    
+    res = await supabase_request("GET", f"verifications?worker_id=eq.{worker_id}&order=created_at.desc&limit=1")
+    verifs = res.json()
+    if not verifs:
+        return JSONResponse({"status": "error", "message": "No verification found"}, status_code=404)
+    return JSONResponse({"status": "success", "verification": verifs[0]})
+
+@app.post("/api/ambassador/verify_action/{worker_id}")
+async def action_worker_verification(worker_id: str, request: Request):
+    if not request.session.get("ambassador_id"):
+        return JSONResponse({"status": "error", "message": "Unauthorized"}, status_code=401)
+        
+    try:
+        body = await request.json()
+        action = body.get("action") # 'approve' or 'reject'
+        
+        if action not in ['approve', 'reject']:
+            return JSONResponse({"status": "error", "message": "Invalid action"}, status_code=400)
+            
+        new_status = "VERIFIED" if action == "approve" else "REJECTED"
+        mapped_account = "Approved" if action == "approve" else "Rejected"
+        
+        # update verification
+        v_res = await supabase_request("PATCH", f"verifications?worker_id=eq.{worker_id}", data={"status": new_status})
+        
+        # update worker
+        w_res = await supabase_request("PATCH", f"workers?id=eq.{worker_id}", data={
+            "verification_status": new_status,
+            "account_status": mapped_account
+        })
+        
+        if not w_res.is_success:
+            return JSONResponse({"status": "error", "message": "Failed to update worker"}, status_code=500)
+            
+        await notify_admin('worker_updated', {"id": worker_id, "verification_status": new_status, "account_status": mapped_account})
+            
+        return JSONResponse({"status": "success", "new_verification_status": new_status, "new_account_status": mapped_account})
+    except Exception as e:
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+
 
 
 
@@ -1607,69 +1759,135 @@ def _set_cache(key: str, data):
 
 
 # ── Public: Ambassador list (used by register page dropdown) ────────────────
+
 @app.get("/api/ambassadors")
 async def public_ambassadors_list():
-    """Return all ACTIVE ambassadors with caching for instant load."""
-    cached = _get_cache("public_ambassadors", ttl=300) # 5 minutes cache
+    """Lightweight endpoint for registration dropdowns."""
+    cache_key = "public_ambassadors"
+    cached = _get_cache(cache_key, ttl=300)
     if cached: return JSONResponse(cached)
-
-    resp = await supabase_request(
-        "GET",
-        "ambassadors?status=eq.active&select=id,name,area,phone&order=name.asc"
-    )
-    data = resp.json()
-    _set_cache("public_ambassadors", data)
+    
+    resp = await supabase_request("GET", "ambassadors?select=id,name,area&status=eq.active&order=name.asc")
+    data = resp.json() if resp.is_success else []
+    _set_cache(cache_key, data)
     return JSONResponse(data)
+
+@app.get("/api/admin/users")
+async def admin_list_users(request: Request):
+    if not request.session.get("admin_logged_in"):
+        return JSONResponse({"status": "error"}, status_code=401)
+    resp = await supabase_request("GET", "users?select=*&order=created_at.desc")
+    return resp.json()
+
+@app.delete("/api/admin/users/{user_id}")
+async def admin_delete_user(user_id: str, request: Request):
+    if not request.session.get("admin_logged_in"):
+        return JSONResponse({"status": "error"}, status_code=401)
+    await supabase_request("DELETE", f"users?id=eq.{user_id}")
+    await notify_admin('user_deleted', {"id": user_id})
+    return {"status": "success"}
 
 @app.get("/api/admin/analytics")
 async def admin_analytics(request: Request):
-    """Real-time platform analytics with short debounce caching."""
-    cached = _get_cache("admin_analytics", ttl=15) # 15 seconds cache to avoid jitter
+    """Real-time platform analytics with growth indicators and time-series data."""
+    cached = _get_cache("admin_analytics", ttl=5) # 5 seconds cache
     if cached: return JSONResponse(cached)
 
     try:
-        # Fetch counts in parallel-ish (sequential due to async constraints)
-        workers_resp  = await supabase_request("GET", "workers?select=id,account_status,is_online")
-        users_resp    = await supabase_request("GET", "users?select=id")
-        amb_resp      = await supabase_request("GET", "ambassadors?select=id,status")
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
+        last_week = now - timedelta(days=7)
 
-        workers  = workers_resp.json()
-        users    = users_resp.json()
-        ambs     = amb_resp.json()
+        # 1. Fetch Basic Data
+        print("DEBUG: Fetching basic analytics data...")
+        workers_resp = await supabase_request("GET", "workers?select=id,verification_status,is_online,created_at")
+        users_resp = await supabase_request("GET", "users?select=id,created_at")
+        amb_resp = await supabase_request("GET", "ambassadors?select=id,status")
+        jobs_resp = await supabase_request("GET", "job_requests?select=id,status,created_at")
 
-        total_workers    = len(workers)
-        approved_workers = len([w for w in workers if w.get("account_status") == "Approved"])
-        online_workers   = len([w for w in workers if w.get("is_online")])
-        total_users      = len(users)
-        total_ambassadors = len(ambs)
-        active_ambassadors = len([a for a in ambs if a.get("status") == "active"])
+        workers = workers_resp.json() if workers_resp.status_code == 200 else []
+        users = users_resp.json() if users_resp.status_code == 200 else []
+        ambs = amb_resp.json() if amb_resp.status_code == 200 else []
+        jobs = jobs_resp.json() if jobs_resp.status_code == 200 else []
 
-        try:
-            jobs_resp  = await supabase_request("GET", "job_requests?select=id,status")
-            jobs       = jobs_resp.json()
-            active_jobs = len([j for j in jobs if j.get("status") in ("accepted", "in_progress")])
-            total_jobs  = len(jobs)
-        except:
-            active_jobs = 0
-            total_jobs  = 0
+        def parse_date(date_str):
+            if not date_str: return None
+            try:
+                # Handle various formats (Supabase typically uses ISO with or without Z)
+                clean_str = date_str.replace('Z', '+00:00').split('.')[0] # Strip microseconds for simpler parsing
+                if '+' not in clean_str: clean_str += '+00:00'
+                return datetime.fromisoformat(clean_str)
+            except:
+                return None
 
+        def get_growth(items, start_date, end_date):
+            current = 0
+            previous = 0
+            for item in items:
+                created = parse_date(item.get('created_at'))
+                if not created: continue
+                if start_date <= created <= end_date:
+                    current += 1
+                elif (start_date - timedelta(days=7)) <= created <= start_date:
+                    previous += 1
+            if previous == 0: return 0
+            return round(((current - previous) / previous) * 100, 1)
+
+        # 2. Daily Time Series
+        chart_labels = []
+        chart_data_users = []
+        chart_data_workers = []
+        
+        print("DEBUG: Generating chart data...")
+        for i in range(13, -1, -1):
+            target_date = (now - timedelta(days=i)).date()
+            chart_labels.append(target_date.strftime("%b %d"))
+            
+            u_count = sum(1 for u in users if (parse_date(u.get('created_at')) or now).date() == target_date)
+            w_count = sum(1 for w in workers if (parse_date(w.get('created_at')) or now).date() == target_date)
+            
+            chart_data_users.append(u_count)
+            chart_data_workers.append(w_count)
+
+        # 3. Revenue Simulation
+        print("DEBUG: Calculating revenue...")
+        completed_jobs = len([j for j in jobs if j.get('status') == 'completed'])
+        total_revenue = completed_jobs * 100
+        
         data = {
-            "total_users": total_users,
-            "total_workers": total_workers,
-            "approved_workers": approved_workers,
-            "online_workers": online_workers,
-            "active_jobs": active_jobs,
-            "total_jobs": total_jobs,
-            "total_ambassadors": total_ambassadors,
-            "active_ambassadors": active_ambassadors,
+            "total_users": len(users),
+            "total_workers": len(workers),
+            "approved_workers": len([w for w in workers if w.get("verification_status") in ("VERIFIED", "Approved")]),
+            "online_workers": len([w for w in workers if w.get("is_online")]),
+            "active_jobs": len([j for j in jobs if j.get("status") in ("accepted", "in_progress")]),
+            "total_jobs": len(jobs),
+            "total_ambassadors": len(ambs),
+            "active_ambassadors": len([a for a in ambs if a.get("status") == "active"]),
+            "revenue": {
+                "total": total_revenue,
+                "worker_share": total_revenue * 0.7,
+                "admin_share": total_revenue * 0.2,
+                "amb_share": total_revenue * 0.1,
+                "completed_count": completed_jobs
+            },
+            "growth": {
+                "users": get_growth(users, last_week, now),
+                "workers": get_growth(workers, last_week, now),
+                "jobs": get_growth(jobs, last_week, now)
+            },
+            "chart": {
+                "labels": chart_labels,
+                "user_counts": chart_data_users,
+                "worker_counts": chart_data_workers
+            }
         }
         _set_cache("admin_analytics", data)
         return JSONResponse(data)
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Analytics error: {e}")
-        return JSONResponse({"total_users": 0, "total_workers": 0, "approved_workers": 0,
-                             "online_workers": 0, "active_jobs": 0, "total_jobs": 0,
-                             "total_ambassadors": 0, "active_ambassadors": 0})
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 
 @app.get("/{city}/{service}", response_class=HTMLResponse)

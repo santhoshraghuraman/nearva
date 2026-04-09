@@ -378,6 +378,20 @@
     <!-- ══ SCREEN: HOME ══ -->
     <div id="screen-home" class="app-screen active">
         
+        <!-- Verification Banner (Dynamic) -->
+        <div id="verification-banner" class="hidden slide-up mb-4">
+            <div id="vb-content" class="p-4 rounded-2xl flex flex-col gap-2 relative overflow-hidden">
+                <div class="flex items-center gap-3">
+                    <span id="vb-icon" class="text-xl"></span>
+                    <div class="flex-1">
+                        <p id="vb-title" class="text-xs font-black uppercase tracking-widest text-white mb-0.5"></p>
+                        <p id="vb-msg" class="text-[10px] font-bold text-white/70 leading-relaxed"></p>
+                    </div>
+                </div>
+                <a id="vb-action" href="/verify" class="hidden w-full text-center py-2.5 bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white border border-white/10 active:scale-95 transition-all mt-2">Verify Now</a>
+            </div>
+        </div>
+        
         <!-- Profile Card -->
         <div class="section-card flex items-center gap-4 mt-4">
             <div class="relative shrink-0">
@@ -606,6 +620,28 @@
             </div>
         </div>
     </div>
+
+    <!-- GPS Permission/Status Modal -->
+    <div id="gps-modal" class="fixed inset-0 z-[10001] flex items-center justify-center bg-black/60 opacity-0 pointer-events-none transition-all duration-300 px-6">
+        <div class="bg-[#1f2937] w-full max-w-sm rounded-[32px] overflow-hidden shadow-2xl transform translate-y-8 transition-all duration-300 border border-white/5" id="gps-modal-content">
+            <div class="h-2 w-full bg-blue-600"></div>
+            <div class="p-8 text-center">
+                <div class="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mx-auto mb-6 text-blue-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                </div>
+                <h3 class="text-xl font-black text-white mb-3" id="gps-modal-title">Enable Location</h3>
+                <p class="text-gray-400 font-bold text-sm leading-relaxed mb-8" id="gps-modal-message">Please enable GPS/location services to use this feature.</p>
+                
+                <div class="flex flex-col gap-3">
+                    <button onclick="retryGPS()" class="w-full py-4 bg-blue-600 text-white font-black rounded-2xl active:scale-95 transition-all shadow-lg shadow-blue-600/20 uppercase tracking-widest text-xs">Enable GPS</button>
+                    <button onclick="closeGPSModal()" class="w-full py-4 bg-white/5 text-gray-400 font-bold rounded-2xl active:scale-95 transition-all uppercase tracking-widest text-xs border border-white/5">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
 {% endblock %}
 
 {% block scripts %}
@@ -670,11 +706,17 @@
             let lat = 0, lng = 0;
             if (targetStatus === 'online') {
                 try {
-                    const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej));
+                    const pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true }));
                     lat = pos.coords.latitude;
                     lng = pos.coords.longitude;
+                    closeGPSModal();
                 } catch (e) {
                     console.warn("Loc failed", e);
+                    showGPSModal(e.code);
+                    toggle.checked = false;
+                    state.isUpdating = false;
+                    if (hint) hint.classList.add('hidden');
+                    return; // Stop the flow
                 }
             }
 
@@ -789,14 +831,50 @@
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
-                    state.isLive = (data.worker.status === 'online');
+                    const w = data.worker;
+                    state.isLive = (w.status === 'online');
                     updateUI(state.isLive);
                     if (state.isLive) startGPSWatch();
+                    
+                    // Handle Verification Banner
+                    const vBanner = document.getElementById('verification-banner');
+                    const vbContent = document.getElementById('vb-content');
+                    const vbIcon = document.getElementById('vb-icon');
+                    const vbTitle = document.getElementById('vb-title');
+                    const vbMsg = document.getElementById('vb-msg');
+                    const vbAction = document.getElementById('vb-action');
+                    const vStatus = w.verification_status || 'PENDING';
+                    
+                    if (vStatus !== 'VERIFIED') {
+                        vBanner.classList.remove('hidden');
+                        if (vStatus === 'PENDING') {
+                            vbContent.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+                            vbIcon.textContent = '⚠️';
+                            vbTitle.textContent = 'Verification Required';
+                            vbMsg.textContent = 'Please complete your identity verification to start receiving jobs and appear on the map.';
+                            vbAction.classList.remove('hidden');
+                            vbAction.href = `/verify?worker_id=${workerId}`;
+                        } else if (vStatus === 'UNDER_REVIEW') {
+                            vbContent.style.background = 'linear-gradient(135deg, #3b82f6, #1d4ed8)';
+                            vbIcon.textContent = '⏳';
+                            vbTitle.textContent = 'Under Review';
+                            vbMsg.textContent = 'Your documents have been submitted and are currently being reviewed by our team. Check back soon!';
+                            vbAction.classList.add('hidden');
+                        } else if (vStatus === 'REJECTED') {
+                            vbContent.style.background = 'linear-gradient(135deg, #ef4444, #b91c1c)';
+                            vbIcon.textContent = '❌';
+                            vbTitle.textContent = 'Verification Rejected';
+                            vbMsg.textContent = 'Your identity documents were rejected. Please review our requirements and try again.';
+                            vbAction.classList.remove('hidden');
+                            vbAction.textContent = 'Re-verify Now';
+                            vbAction.href = `/verify?worker_id=${workerId}`;
+                        }
+                    }
                 }
             });
 
         pollData();
-        setInterval(pollData, 10000);
+        // INTERVAL REMOVED: Transitioned to Real-time Socket.io events
     });
 
     // ── POLLING DATA ──
@@ -1077,13 +1155,33 @@
         });
 
         socket.on('connect', () => {
-            console.log('Connected');
-            // Join personal room for worker notifications
-            socket.emit('join', { user_id: workerId });
+            console.log('Connected to Real-time Engine');
+            // Register in dedicated worker room
+            socket.emit('register', { id: `worker_${workerId}` });
+            
             // Join active chat if one is open
             if (currentChatId) {
                 socket.emit('join-room', { roomId: currentChatId });
-                console.log("Joined room:", currentChatId);
+            }
+        });
+
+        // ── CENTRALIZED SYSTEM EVENTS (Real-time Sync) ──
+        socket.on('system_event', (event) => {
+            console.log("System Event:", event.type, event.data);
+            
+            switch(event.type) {
+                case 'new_job':
+                    unreadJobCount++;
+                    updateUnreadBadges();
+                    pollData(); // Instant refresh
+                    showToast("New Job Request! ⚡", "success");
+                    break;
+                case 'job_state_changed':
+                    pollData(); // Sync list state
+                    break;
+                case 'worker_updated':
+                    // Refresh profile/status if needed
+                    break;
             }
         });
 
@@ -1111,12 +1209,6 @@
             loadWorkerInbox();
         });
 
-        socket.on('new_job', (data) => {
-            unreadJobCount++;
-            updateUnreadBadges();
-            pollData(); // Refresh lists
-            showToast("New Job Request! ⚡", "success");
-        });
 
         socket.on('typing-status', (data) => {
             if (currentChatId === data.roomId) {
@@ -1190,5 +1282,36 @@
         if (sid === 'chat') { unreadChatCount = 0; updateUnreadBadges(); }
         if (sid === 'requests') { unreadJobCount = 0; updateUnreadBadges(); }
     }
+
+    // --- GPS MODAL HELPERS ---
+    window.showGPSModal = function(errorCode) {
+        const modal = document.getElementById('gps-modal');
+        const content = document.getElementById('gps-modal-content');
+        const messageEl = document.getElementById('gps-modal-message');
+        
+        if (!modal || !content || !messageEl) return;
+
+        if (errorCode === 1) { // PERMISSION_DENIED
+            messageEl.textContent = "Go to Settings → Enable Location Permission for Nearva.";
+        } else {
+            messageEl.textContent = "Please enable GPS/location services to use this feature.";
+        }
+        
+        modal.classList.remove('opacity-0', 'pointer-events-none');
+        content.classList.remove('translate-y-8');
+    };
+
+    window.closeGPSModal = function() {
+        const modal = document.getElementById('gps-modal');
+        const content = document.getElementById('gps-modal-content');
+        if (!modal || !content) return;
+        modal.classList.add('opacity-0', 'pointer-events-none');
+        content.classList.add('translate-y-8');
+    };
+
+    window.retryGPS = function() {
+        closeGPSModal();
+        handleToggleChange(); // Retry the toggle flow
+    };
 </script>
 {% endblock %}

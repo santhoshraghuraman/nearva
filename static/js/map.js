@@ -1,3 +1,9 @@
+const VERIFIED_BADGE_SVG = `<svg class="verified-badge-icon w-full h-full" viewBox="0 0 24 24" fill="#1897f2" xmlns="http://www.w3.org/2000/svg">
+    <path d="M22.5 12.5c0-1.58-.8-2.47-1.24-3.23.33-.79.67-1.87.67-3.13 0-1.89-1.29-3.41-3.17-3.7-.3-.05-.71-.07-1.21-.07-.47 0-.91.02-1.32.07-.37-.84-1.07-1.53-2.02-1.85-.43-.14-.94-.21-1.53-.21-.59 0-1.1.07-1.53.21-.95.32-1.65 1.01-2.02 1.85-.41-.05-.85-.07-1.32-.07-.5 0-.91.02-1.21.07C3.96 2.73 2.67 4.25 2.67 6.14c0 1.26.34 2.34.67 3.13-.44.76-1.24 1.65-1.24 3.23 0 1.58.8 2.47 1.24 3.23-.33.79-.67 1.87-.67 3.13 0 1.89 1.29 3.41 3.17 3.7.3.05.71.07 1.21.07.47 0 .91-.02 1.32-.07.37.84 1.07 1.53 2.02 1.85.43.14.94.21 1.53.21.59 0 1.1-.07 1.53-.21.95-.32 1.65-1.01 2.02-1.85.41.05.85.07 1.32.07.5 0 .91-.02 1.21-.07 1.88-.29 3.17-1.81 3.17-3.7 0-1.26-.34-2.34-.67-3.13.44-.76 1.24-1.65 1.24-3.23zM9.81 17.08l-3.53-3.53 1.41-1.41 2.12 2.12 4.95-4.95 1.41 1.41-6.36 6.36z" fill="white"></path>
+    <path d="M22.5 12.5c0-1.58-.8-2.47-1.24-3.23.33-.79.67-1.87.67-3.13 0-1.89-1.29-3.41-3.17-3.7-.3-.05-.71-.07-1.21-.07-.47 0-.91.02-1.32.07-.37-.84-1.07-1.53-2.02-1.85-.43-.14-.94-.21-1.53-.21-.59 0-1.1.07-1.53.21-.95.32-1.65 1.01-2.02 1.85-.41-.05-.85-.07-1.32-.07-.5 0-.91.02-1.21.07C3.96 2.73 2.67 4.25 2.67 6.14c0 1.26.34 2.34.67 3.13-.44.76-1.24 1.65-1.24 3.23 0 1.58.8 2.47 1.24 3.23-.33.79-.67 1.87-.67 3.13 0 1.89 1.29 3.41 3.17 3.7.3.05.71.07 1.21.07.47 0 .91-.02 1.32-.07.37.84 1.07 1.53 2.02 1.85.43.14.94.21 1.53.21.59 0 1.1-.07 1.53-.21.95-.32 1.65-1.01 2.02-1.85.41.05.85.07 1.32.07.5 0 .91-.02 1.21-.07 1.88-.29 3.17-1.81 3.17-3.7 0-1.26-.34-2.34-.67-3.13.44-.76 1.24-1.65 1.24-3.23zM9.81 17.08l-3.53-3.53 1.41-1.41 2.12 2.12 4.95-4.95 1.41 1.41-6.36 6.36z" fill="#1897f2" style="transform: scale(1); transform-origin: center;"></path>
+    <path d="M9.81 17.08l-3.53-3.53 1.41-1.41 2.12 2.12 4.95-4.95 1.41 1.41-6.36 6.36z" fill="white"></path>
+</svg>`;
+
 document.addEventListener("DOMContentLoaded", function () {
     const urlParams = new URLSearchParams(window.location.search);
     const initialCategory = urlParams.get('category') || 'All';
@@ -134,6 +140,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     if (gpsBtn) gpsBtn.classList.remove('gps-glow');
                     handleGPSFix(pos, true, gpsBtn);
                     startContinuousTracking();
+                    closeGPSModal(); // Close modal if it was open
                 },
                 (err) => {
                     console.warn(`GPS Kickstart Error (Try ${retryCount + 1}):`, err);
@@ -147,6 +154,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     showMapLoading(false);
                     hideLoadingOverlay();
+                    
+                    // Show custom modal only on manual clicks or if it's a hard rejection
+                    if (!isAuto || err.code === 1) {
+                        showGPSModal(err.code);
+                    }
+
                     // Still try to start watch in background in case user turns it on later or allows it
                     startContinuousTracking();
                 },
@@ -169,6 +182,12 @@ document.addEventListener("DOMContentLoaded", function () {
                     hideLoadingOverlay();
                     if (gpsBtn) gpsBtn.classList.remove('gps-glow', 'gps-following');
                     window._gpsErrorCount = (window._gpsErrorCount || 0) + 1;
+                    
+                    // If error count is high and it's not a hard rejection, maybe show modal
+                    if (err.code === 1) {
+                        // showGPSModal(1); // Usually handled by kickstart, but safe to keep
+                    }
+
                     if (err.code !== 1 && window._gpsErrorCount <= 2) {
                         setTimeout(() => window.locateUser(true), 5000);
                     }
@@ -508,12 +527,20 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // Privacy Mode: Always use emoji for map marker, never profile_photo
         const iconContent = `<span class="transform transition-transform active:scale-90">${emoji}</span>`;
+        
+        // Verified Badge Logic
+        const isVerified = worker.verification_status === 'VERIFIED';
+        const verifiedBadge = isVerified ? `
+            <div class="verified-badge-marker">
+                ${VERIFIED_BADGE_SVG}
+            </div>` : '';
 
         return L.divIcon({
             className: 'worker-marker-container',
             html: `<div class="marker-hit-area relative w-16 h-16 flex items-center justify-center cursor-pointer" style="pointer-events: auto;">
                     <div class="relative z-10 flex items-center justify-center w-12 h-12 ${bgClass} rounded-full shadow-lg border-2 ${borderClass} ${glowClass} text-2xl transition-all duration-300 transform-gpu hover:scale-110 active:scale-95" style="pointer-events: none;">
                         ${iconContent}
+                        ${verifiedBadge}
                     </div>
                    </div>`,
             iconSize: [64, 64],
@@ -843,7 +870,13 @@ document.addEventListener("DOMContentLoaded", function () {
                     </div>
                     <div class="flex-1 overflow-hidden">
                         <div class="flex items-center justify-between gap-2">
-                            <h4 class="font-bold text-gray-900 truncate group-hover:text-blue-700 transition-colors">${w.name}</h4>
+                            <div class="flex items-center gap-1 min-w-0">
+                                <h4 class="font-bold text-gray-900 truncate group-hover:text-blue-700 transition-colors">${w.name}</h4>
+                                ${w.verification_status === 'VERIFIED' ? `
+                                <div class="w-4 h-4 shrink-0">
+                                    ${VERIFIED_BADGE_SVG}
+                                </div>` : ''}
+                            </div>
                             <span class="text-[10px] font-black text-blue-600 uppercase whitespace-nowrap bg-blue-50 px-2 py-0.5 rounded-full">${w.distanceText}</span>
                         </div>
                         <p class="text-[11px] text-gray-500 font-medium uppercase tracking-wider mt-0.5">${w.service}</p>
@@ -971,7 +1004,7 @@ document.addEventListener("DOMContentLoaded", function () {
             latitude: worker.latitude ? parseFloat(worker.latitude).toFixed(6) : '0.000000',
             longitude: worker.longitude ? parseFloat(worker.longitude).toFixed(6) : '0.000000',
             isOnline: worker.is_online === true,
-            isVerified: worker.is_verified === true || true, // Default to true for premium feel for now
+            isVerified: worker.verification_status === 'VERIFIED',
             photo: photoUrl
         };
 
@@ -1041,9 +1074,12 @@ document.addEventListener("DOMContentLoaded", function () {
                     </div>
 
                     <div class="flex-1 w-full text-left">
-                        <div class="flex flex-wrap items-center gap-2 mb-1">
+                        <div class="flex flex-wrap items-center gap-1.5 mb-1">
                             <h3 class="text-xl font-black text-gray-900 leading-tight">${safeWorker.name}</h3>
-                            <span class="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-bold uppercase border border-blue-100/50">Verified</span>
+                            ${safeWorker.isVerified ? `
+                            <div class="w-5 h-5">
+                                ${VERIFIED_BADGE_SVG}
+                            </div>` : ''}
                         </div>
                         <div class="flex items-center gap-2 mb-2">
                              <div class="flex items-center gap-0.5 text-yellow-400">
@@ -1505,11 +1541,110 @@ document.addEventListener("DOMContentLoaded", function () {
         setTimeout(() => modal.classList.add('hidden'), 300);
     };
 
-    // Refresh every 15s (increased from 10s for performance)
-    setInterval(() => {
-        // Only auto-update if map is visible and not being interacted with
-        if (document.visibilityState === 'visible' && !window._isProgrammaticMove) {
-            loadWorkers(true);
-        }
-    }, 15000);
+    // INTERVAL REMOVED: Transitioned to Real-time Socket.io events
+
+    // --- ENHANCED REAL-TIME SYNC ENGINE ---
+    if (typeof io !== 'undefined') {
+        const socket = io({
+            path: '/socket.io',
+            transports: ['polling']
+        });
+        window.socket = socket;
+
+        socket.on('connect', () => {
+            console.log("Connected to Real-time Sync Engine");
+            // Register user if logged in to receive chat notifications on map
+            if (USER_ID) {
+                socket.emit('register', { id: `user_${USER_ID}` });
+            }
+        });
+
+        socket.on('system_event', (event) => {
+            console.log("System Event Received:", event.type);
+            
+            switch(event.type) {
+                case 'worker_updated':
+                    // Real-time Marker Update
+                    const wData = event.data;
+                    if (markerMap.has(wData.id)) {
+                        const marker = markerMap.get(wData.id);
+                        if (wData.latitude && wData.longitude) {
+                            marker.setLatLng([wData.latitude, wData.longitude]);
+                        }
+                        // Update icon if status/availability changed
+                        marker.setIcon(getWorkerIcon(wData, wData.isNearby));
+                        
+                        // Sync profile sheet if looking at this worker
+                        if (window.selectedWorkerId === wData.id) {
+                            updateBottomSheetContent(wData);
+                        }
+                    } else if (!window._isProgrammaticMove) {
+                        // If it's a new worker appearing nearby, we might want to fetch
+                        loadWorkers(true);
+                    }
+                    break;
+
+                case 'receive-message':
+                    // If in-app chat is open for this roomId, append
+                    if (window._activeChatId === event.data.roomId) {
+                        // Import function from templates if needed, or trigger local fetch
+                        if (typeof loadMapChatMessages === 'function') {
+                            loadMapChatMessages(window._activeChatId);
+                        }
+                    }
+                    break;
+
+                case 'notify_message':
+                    // Show a small toast or update chat badge on map
+                    showSmartNotification("New message received! 💬");
+                    break;
+            }
+        });
+
+        // Legacy admin event support
+        socket.on('admin_event', (event) => {
+            if (event.type === 'worker_updated') loadWorkers(true);
+        });
+    }
 });
+
+// --- GPS MODAL HELPERS ---
+window.showGPSModal = function(errorCode) {
+    const modal = document.getElementById('gps-modal');
+    const content = document.getElementById('gps-modal-content');
+    const messageEl = document.getElementById('gps-modal-message');
+    
+    if (!modal || !content || !messageEl) return;
+
+    // Use currentLang if available, or fetch it
+    const lang = localStorage.getItem('nearva_lang') || 'en';
+
+    if (errorCode === 1) { // PERMISSION_DENIED
+        messageEl.innerHTML = lang === 'ta' ? 
+            'அமைப்புகளுக்குச் செல்லவும் → Nearva க்கான இருப்பிட அனுமதியை இயக்கவும்.' : 
+            'Go to Settings &rarr; Enable Location Permission for Nearva.';
+    } else {
+        messageEl.innerHTML = lang === 'ta' ? 
+            'இந்த அம்சத்தைப் பயன்படுத்த ஜிபிஎஸ்/இருப்பிட சேவைகளை இயக்கவும்.' : 
+            'Please enable GPS/location services to use this feature.';
+    }
+    
+    modal.classList.remove('opacity-0', 'pointer-events-none');
+    content.classList.remove('translate-y-8');
+};
+
+window.closeGPSModal = function() {
+    const modal = document.getElementById('gps-modal');
+    const content = document.getElementById('gps-modal-content');
+    if (!modal || !content) return;
+    modal.classList.add('opacity-0', 'pointer-events-none');
+    content.classList.add('translate-y-8');
+};
+
+window.retryGPS = function() {
+    closeGPSModal();
+    // Use window.locateUser if defined
+    if (window.locateUser) {
+        setTimeout(() => window.locateUser(false), 300);
+    }
+};

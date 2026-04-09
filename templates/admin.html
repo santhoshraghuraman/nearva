@@ -12,130 +12,115 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}?v=9.1">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        .fade-out {
-            opacity: 0;
-            transform: translateY(10px);
-            transition: all 0.5s ease;
+        :root {
+            --bg-base:      #07090d;
+            --bg-surface:   #0f172a;
+            --bg-card:      #1e293b;
+            --border:       rgba(255,255,255,0.06);
+            --indigo:       #6366f1;
+            --text-primary: #f8fafc;
+            --text-muted:   #94a3b8;
         }
-        .modal-enter {
-            opacity: 0;
-            transform: scale(0.95);
+        * { -webkit-tap-highlight-color: transparent; }
+        body { background: var(--bg-base); color: var(--text-primary); }
+
+        .solid-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            transition: all 0.2s ease;
         }
-        .modal-enter-active {
-            opacity: 1;
-            transform: scale(1);
-            transition: all 0.2s ease-out;
+        .solid-card:hover { border-color: rgba(99,102,241,0.2); }
+
+        .btn-instant {
+            transition: transform 0.1s active:scale-95;
         }
 
-        /* Analytics Cards */
-        .analytics-card {
-            background:white; border-radius:20px;
-            border:1px solid rgba(0,0,0,0.05);
-            box-shadow:0 2px 16px -4px rgba(0,0,0,0.06);
-            transition:transform 0.22s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.22s;
-        }
-        .analytics-card:hover { transform:translateY(-3px); box-shadow:0 8px 28px -8px rgba(0,0,0,0.12); }
-
-        @keyframes countUp {
-            from { opacity:0; transform:translateY(8px); }
-            to   { opacity:1; transform:translateY(0); }
-        }
-        .count-animate { animation:countUp 0.5s cubic-bezier(0.16,1,0.3,1) both; }
-
-        @keyframes shimmer { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
         .skeleton {
-            background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%);
-            background-size:200% 100%;
-            animation:shimmer 1.5s infinite;
-            border-radius:10px;
+            background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s infinite;
         }
+        @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
     </style>
 </head>
 
-<body class="bg-[#f8fafc] min-h-screen text-slate-900 overflow-x-hidden">
+<body class="bg-slate-950 text-white min-h-screen overflow-x-hidden">
 
 
 
     <!-- Confirmation Modal -->
     <div id="confirmModal"
-        class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[90] hidden flex items-center justify-center p-4">
-        <div class="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-8 transform transition-all scale-95 opacity-0"
+        class="fixed inset-0 bg-slate-950/80 z-[120] hidden flex items-center justify-center p-4">
+        <div class="solid-card bg-[#1e293b] rounded-[2rem] shadow-2xl max-w-sm w-full p-8 transform transition-all scale-95 opacity-0 border border-white/5"
             id="modalContent">
             <div
-                class="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl">
+                class="w-16 h-16 bg-red-500/10 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-6 text-2xl">
                 ⚠️</div>
             <h3 class="text-xl font-black text-center mb-2" id="modalTitle">Confirm Action</h3>
-            <p class="text-slate-500 text-center text-sm leading-relaxed mb-8" id="modalMsg">Are you sure you want to
+            <p class="text-slate-400 text-center text-sm font-medium leading-relaxed mb-8" id="modalMsg">Are you sure you want to
                 proceed? This action cannot be undone.</p>
             <div class="grid grid-cols-2 gap-3">
                 <button onclick="closeModal()"
-                    class="py-3 px-4 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-2xl transition-all">Cancel</button>
+                    class="py-3 px-4 bg-white/5 hover:bg-white/10 text-slate-400 font-bold rounded-2xl transition-all">Cancel</button>
                 <button id="modalConfirmBtn"
-                    class="py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-2xl shadow-lg shadow-red-200 transition-all">Yes,
-                    Confirm</button>
+                    class="py-3 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-2xl shadow-lg shadow-red-500/20 transition-all">Confirm</button>
             </div>
         </div>
     </div>
 
     <!-- Login Modal -->
     <div id="loginModal"
-        class="{% if is_logged_in %}hidden{% endif %} fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-[110] p-4">
-        <div class="bg-white p-10 rounded-[2.5rem] shadow-2xl max-w-md w-full">
-            <div
-                class="w-20 h-20 bg-blue-600 text-white rounded-full flex items-center justify-center mx-auto mb-8 text-3xl font-black">
-                N</div>
-            <h2 class="text-3xl font-black mb-2 text-center">Admin Access</h2>
-            <p class="text-slate-500 text-center mb-8 text-sm">Please enter your credentials to manage workers.</p>
+        class="{% if is_logged_in %}hidden{% endif %} fixed inset-0 bg-slate-950 flex items-center justify-center z-[110] p-4">
+        <div class="solid-card bg-[#0f172a] p-10 rounded-[2.5rem] shadow-2xl max-w-md w-full border border-white/5">
+            <div class="flex items-center justify-center mb-10">
+                <div class="w-28 h-16 bg-white rounded-[1.25rem] flex items-center justify-center p-1.5 shadow-2xl shadow-white/5 border border-white/10 overflow-hidden">
+                    <img src="{{ url_for('static', path='images/nearva_logo.png') }}?v=11.0" 
+                        class="h-full w-auto object-contain mix-blend-multiply scale-[1.8]" 
+                        alt="Nearva logo">
+                </div>
+            </div>
+            <h2 class="text-2xl font-black mb-2 text-center">Admin Access</h2>
+            <p class="text-slate-500 font-bold text-center mb-8 text-xs uppercase tracking-widest">Enterprise Control Panel</p>
             <div class="space-y-4">
                 <input type="password" id="password"
-                    class="w-full bg-slate-50 border-0 ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-600 p-4 rounded-2xl transition-all outline-none"
-                    placeholder="Enter Admin Password">
+                    class="w-full bg-white/5 border border-white/10 focus:ring-2 focus:ring-indigo-600 p-5 rounded-2xl transition-all outline-none text-white text-center text-lg tracking-widest"
+                    placeholder="••••••••">
                 <button onclick="login()" id="loginBtn"
-                    class="w-full bg-blue-600 text-white p-4 rounded-2xl font-bold hover:bg-blue-700 transition-all shadow-xl shadow-blue-200 active:scale-95">Login
-                    to Dashboard</button>
+                    class="w-full bg-indigo-600 text-white p-5 rounded-2xl font-black hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-500/20 active:scale-95 uppercase tracking-widest text-xs">Authorize Session</button>
             </div>
-            <p id="errorMsg" class="text-red-500 text-sm mt-4 text-center font-bold hidden">Invalid password</p>
-            <div class="mt-8 text-center">
-                <a href="/" class="text-sm font-bold text-slate-400 hover:text-blue-600 transition-all">← Back to
-                    Website</a>
+            <p id="errorMsg" class="text-red-500 text-xs mt-6 text-center font-black uppercase tracking-widest hidden">Access Denied</p>
+            <div class="mt-8 text-center pt-8 border-t border-white/5">
+                <a href="/" class="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-indigo-400 transition-all">← Terminal Exit</a>
             </div>
         </div>
     </div>
 
     <div id="dashboard" class="{% if not is_logged_in %}hidden{% endif %}">
-        <nav class="bg-white/80 backdrop-blur-md border-b border-slate-100 sticky top-0 z-40">
+        <!-- Navigation -->
+        <nav class="bg-[#07090d] border-b border-white/5 sticky top-0 z-40">
             <div class="max-w-7xl mx-auto px-6 lg:px-8">
-                <div class="flex justify-between h-20 px-4 md:px-0">
-                    <div class="flex items-center gap-3 md:gap-6">
-                        <a href="/"
-                            class="text-slate-400 hover:text-slate-900 flex items-center gap-2 font-bold transition-all text-sm group">
-                            <span class="p-2 rounded-xl bg-slate-50 group-hover:bg-slate-100 transition-all">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20"
-                                    fill="currentColor">
-                                    <path fill-rule="evenodd"
-                                        d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z"
-                                        clip-rule="evenodd" />
-                                </svg>
-                            </span>
-                            <span class="hidden sm:inline">Website</span>
-                        </a>
-                        <div class="h-6 w-[1px] bg-slate-200"></div>
-                        <a href="/" class="flex items-center shrink-0">
-                            <img src="{{ url_for('static', path='images/nearva_logo.png') }}?v={{ range(1, 10000) | random }}"
-                                class="h-8 md:h-10 w-auto" alt="Nearva Logo">
-                            <span
-                                class="hidden xs:inline text-lg font-black text-slate-900 tracking-tight ml-2 md:ml-3">Admin</span>
+                <div class="flex justify-between h-20 items-center">
+                    <div class="flex items-center gap-6">
+                        <a href="/" class="flex items-center gap-4 group transition-all">
+                            <div class="bg-white w-24 h-10 rounded-xl flex items-center justify-center p-1 shadow-xl shadow-white/5 border border-white/10 overflow-hidden transition-transform group-hover:scale-[1.03]">
+                                <img src="{{ url_for('static', path='images/nearva_logo.png') }}?v=11.0" 
+                                    class="h-full w-auto object-contain mix-blend-multiply scale-[1.5]" 
+                                    alt="Nearva logo">
+                            </div>
+                            <span class="text-lg font-black tracking-tight">Admin <span class="text-indigo-500">Panel</span></span>
                         </a>
                     </div>
-                    <div class="flex items-center gap-2 md:gap-4">
-                        <div id="refresh-indicator"
-                            class="hidden items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-1 md:px-3 md:py-1.5 rounded-full">
-                            <div class="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping"></div>
-                            <span class="hidden sm:inline">Syncing</span>
+                    
+                    <div class="flex items-center gap-4">
+                        <div id="refresh-indicator" class="hidden items-center gap-2 text-[10px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/10 px-3 py-1.5 rounded-full border border-indigo-500/20">
+                            <div class="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping"></div>
+                            <span>Live Sync</span>
                         </div>
-                        <button onclick="logout()"
-                            class="text-[10px] md:text-xs font-black text-slate-500 hover:text-red-600 px-3 py-2 md:px-5 md:py-2.5 rounded-xl border border-slate-200 hover:border-red-100 hover:bg-red-50 transition-all uppercase tracking-tight">Logout</button>
+                        <button onclick="logout()" class="text-xs font-bold text-slate-400 hover:text-white px-4 py-2 rounded-xl transition-all">Logout</button>
                     </div>
                 </div>
             </div>
@@ -143,58 +128,105 @@
 
         <main class="max-w-7xl mx-auto py-10 px-6 lg:px-8">
             
-            <!-- Analytics Cards -->
-            <div id="analytics-row" class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <!-- Skeleton while loading -->
-                <div class="analytics-card p-5">
-                    <div class="skeleton h-4 w-16 mb-3"></div>
-                    <div class="skeleton h-8 w-12 mb-1"></div>
-                    <div class="skeleton h-3 w-20"></div>
+            <!-- Top Stats & Analytics Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
+                <!-- Left: Stats Cards -->
+                <div class="lg:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-4" id="analytics-row">
+                    <!-- Skeletons... -->
+                    <div class="solid-card p-6 rounded-[2rem] min-h-[140px] flex flex-col justify-between">
+                        <div class="skeleton h-4 w-20 mb-4 opacity-20"></div>
+                        <div class="skeleton h-8 w-12 mb-2"></div>
+                        <div class="skeleton h-3 w-16 opacity-30"></div>
+                    </div>
+                    <div class="solid-card p-6 rounded-[2rem] min-h-[140px] flex flex-col justify-between">
+                        <div class="skeleton h-4 w-20 mb-4 opacity-20"></div>
+                        <div class="skeleton h-8 w-12 mb-2"></div>
+                        <div class="skeleton h-3 w-16 opacity-30"></div>
+                    </div>
+                    <div class="solid-card p-6 rounded-[2rem] min-h-[140px] flex flex-col justify-between">
+                        <div class="skeleton h-4 w-20 mb-4 opacity-20"></div>
+                        <div class="skeleton h-8 w-12 mb-2"></div>
+                        <div class="skeleton h-3 w-16 opacity-30"></div>
+                    </div>
+                    <div class="solid-card p-6 rounded-[2rem] min-h-[140px] flex flex-col justify-between">
+                        <div class="skeleton h-4 w-20 mb-4 opacity-20"></div>
+                        <div class="skeleton h-8 w-12 mb-2"></div>
+                        <div class="skeleton h-3 w-16 opacity-30"></div>
+                    </div>
                 </div>
-                <div class="analytics-card p-5">
-                    <div class="skeleton h-4 w-16 mb-3"></div>
-                    <div class="skeleton h-8 w-12 mb-1"></div>
-                    <div class="skeleton h-3 w-20"></div>
-                </div>
-                <div class="analytics-card p-5">
-                    <div class="skeleton h-4 w-16 mb-3"></div>
-                    <div class="skeleton h-8 w-12 mb-1"></div>
-                    <div class="skeleton h-3 w-20"></div>
-                </div>
-                <div class="analytics-card p-5">
-                    <div class="skeleton h-4 w-16 mb-3"></div>
-                    <div class="skeleton h-8 w-12 mb-1"></div>
-                    <div class="skeleton h-3 w-20"></div>
+
+                <!-- Right: Wallet/Revenue Card -->
+                <div class="solid-card p-6 border-indigo-500/20 bg-indigo-500/5 flex flex-col justify-between" id="wallet-card">
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h4 class="text-xs font-black text-indigo-400 uppercase tracking-widest">Platform Revenue</h4>
+                            <span class="p-1 px-2 rounded-md bg-indigo-500/20 text-[10px] text-indigo-300 font-bold">Simulator</span>
+                        </div>
+                        <div class="text-3xl font-black mb-1" id="wallet-total">₹0</div>
+                        <p class="text-[10px] text-slate-500 font-bold uppercase tracking-tight">Total Gross Settlement</p>
+                    </div>
+                    <div class="mt-4 pt-4 border-t border-white/5 space-y-2">
+                        <div class="flex justify-between text-[10px] font-bold">
+                            <span class="text-slate-500">Workers Share (70%)</span>
+                            <span id="revenue-worker">₹0</span>
+                        </div>
+                        <div class="flex justify-between text-[10px] font-bold">
+                            <span class="text-indigo-400">Admin Fee (20%)</span>
+                            <span id="revenue-admin">₹0</span>
+                        </div>
+                    </div>
+                    <button disabled class="w-full mt-4 py-2 bg-white/5 text-slate-500 text-[10px] font-black uppercase tracking-widest rounded-xl cursor-not-allowed">Withdraw Restricted</button>
                 </div>
             </div>
 
-            <div class="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
-                <div>
-                    <div class="flex items-center justify-between w-full md:w-auto mb-2">
-                        <h2 class="text-3xl font-black text-slate-900" id="admin-title">Worker Management</h2>
+            <!-- Charts Section -->
+            <div class="solid-card p-6 mb-10 overflow-hidden">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h3 class="text-lg font-black">Platform Growth</h3>
+                        <p class="text-xs text-slate-500 font-bold">New user & worker registrations (Last 14 Days)</p>
                     </div>
-                    <div class="flex gap-6 border-b border-slate-200 mt-4">
-                        <button onclick="switchTab('workers')" id="tab-workers" class="pb-2 text-sm font-bold border-b-2 border-slate-900 text-slate-900 transition-colors">Workers</button>
-                        <button onclick="switchTab('ambassadors')" id="tab-ambassadors" class="pb-2 text-sm font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-900 transition-colors">Community Ambassadors</button>
-                        <a href="/ambassador/login" target="_blank" class="pb-2 text-sm font-bold border-b-2 border-transparent text-blue-500 hover:text-blue-700 transition-colors flex items-center gap-1">
-                            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                            Ambassador Portal
-                        </a>
+                    <div class="flex items-center gap-4 text-[10px] font-black uppercase tracking-widest">
+                        <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-indigo-500"></div> <span>Users</span></div>
+                        <div class="flex items-center gap-2"><div class="w-2 h-2 rounded-full bg-slate-400"></div> <span>Workers</span></div>
                     </div>
                 </div>
+                <div class="h-64 w-full">
+                    <canvas id="growthChart"></canvas>
+                </div>
+            </div>
 
-                <div class="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto">
-                    <!-- Search -->
-                    <div class="relative w-full sm:w-64">
-                        <input type="text" id="workerSearch" oninput="applyFilters()"
-                            class="w-full bg-white border border-slate-200 p-3 pl-10 rounded-2xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm"
-                            placeholder="Search workers...">
-                        <svg class="w-4 h-4 absolute left-3.5 top-3.5 text-slate-400" fill="none" stroke="currentColor"
+            <div class="flex flex-col xl:flex-row xl:items-end justify-between gap-8 mb-12">
+                <div class="space-y-6">
+                    <div>
+                        <h2 class="text-4xl font-black text-white tracking-tight" id="admin-title">Community Partners</h2>
+                    </div>
+                    <div class="flex gap-8 border-b border-white/5">
+                        <button onclick="switchTab('workers')" id="tab-workers" class="pb-3 text-xs font-black uppercase tracking-widest border-b-2 border-indigo-500 text-white transition-all duration-200">Workers</button>
+                        <button onclick="switchTab('users')" id="tab-users" class="pb-3 text-xs font-black uppercase tracking-widest border-b-2 border-transparent text-slate-500 hover:text-white transition-all duration-200">Users</button>
+                        <button onclick="switchTab('ambassadors')" id="tab-ambassadors" class="pb-3 text-xs font-black uppercase tracking-widest border-b-2 border-transparent text-slate-500 hover:text-white transition-all duration-200">Ambassadors</button>
+                    </div>
+                </div>
+                
+                <div class="flex flex-col sm:flex-row items-center gap-4 w-full xl:w-auto">
+                    <!-- Global Search -->
+                    <div class="group relative w-full sm:w-72">
+                        <input type="text" id="workerSearch"
+                            class="w-full bg-[#0f172a] border border-white/5 p-4 pl-12 rounded-[1.25rem] text-sm font-medium focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/30 outline-none transition-all duration-300 text-white shadow-inner"
+                            placeholder="Search records...">
+                        <svg class="w-5 h-5 absolute left-4 top-4 text-slate-500 group-focus-within:text-indigo-400 transition-colors duration-300" fill="none" stroke="currentColor"
                             viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                         </svg>
                     </div>
+
+                    <!-- Dynamic Action Button -->
+                    <button id="header-action-btn" onclick="openAmbassadorModal()" 
+                        class="hidden bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black text-xs px-8 py-4 rounded-[1.25rem] shadow-xl shadow-indigo-500/20 transition-all duration-300 flex items-center justify-center gap-3 hover:scale-[1.03] active:scale-95 uppercase tracking-widest whitespace-nowrap">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" /></svg>
+                        Add Ambassador
+                    </button>
                 </div>
             </div>
 
@@ -203,27 +235,49 @@
                 <!-- Filter Chips -->
                 <div class="flex flex-wrap gap-2 mb-8" id="filterChips">
                 <button onclick="setFilter('all')" data-filter="all"
-                    class="filter-chip active py-2 px-5 rounded-full text-xs font-bold transition-all bg-slate-900 text-white shadow-lg shadow-slate-200">All
+                    class="filter-chip active py-2 px-5 rounded-full text-xs font-bold transition-all bg-indigo-600 text-white shadow-lg shadow-indigo-500/20">All
                     Workers</button>
                 <button onclick="setFilter('Pending')" data-filter="Pending"
-                    class="filter-chip py-2 px-5 rounded-full text-xs font-bold transition-all bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">Pending</button>
+                    class="filter-chip py-2 px-5 rounded-full text-xs font-bold transition-all bg-white/5 border border-white/5 text-slate-400 hover:text-white">Pending</button>
                 <button onclick="setFilter('Approved')" data-filter="Approved"
-                    class="filter-chip py-2 px-5 rounded-full text-xs font-bold transition-all bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">Approved</button>
-                <button onclick="setFilter('Rejected')" data-filter="Rejected"
-                    class="filter-chip py-2 px-5 rounded-full text-xs font-bold transition-all bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">Rejected</button>
-                <div class="w-[1px] h-6 bg-slate-200 self-center"></div>
+                    class="filter-chip py-2 px-5 rounded-full text-xs font-bold transition-all bg-white/5 border border-white/5 text-slate-400 hover:text-white">Approved</button>
+                <div class="w-[1px] h-6 bg-white/10 self-center"></div>
                 <button onclick="setFilter('online')" data-filter="online"
-                    class="filter-chip py-2 px-5 rounded-full text-xs font-bold transition-all bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">Online</button>
-                <button onclick="setFilter('offline')" data-filter="offline"
-                    class="filter-chip py-2 px-5 rounded-full text-xs font-bold transition-all bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">Offline</button>
+                    class="filter-chip py-2 px-5 rounded-full text-xs font-bold transition-all bg-white/5 border border-white/5 text-slate-400 hover:text-white">Online</button>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="workerGrid">
                 <!-- Skeleton Loading -->
-                <div class="bg-white rounded-[2rem] p-6 border border-slate-100 animate-pulse h-48"></div>
-                <div class="bg-white rounded-[2rem] p-6 border border-slate-100 animate-pulse h-48"></div>
-                <div class="bg-white rounded-[2rem] p-6 border border-slate-100 animate-pulse h-48"></div>
+                <div class="solid-card p-6 h-48 flex flex-col justify-between">
+                    <div class="flex gap-4">
+                        <div class="skeleton h-12 w-12 rounded-xl opacity-20"></div>
+                        <div class="flex-1 space-y-2">
+                            <div class="skeleton h-4 w-24 opacity-20"></div>
+                            <div class="skeleton h-3 w-32 opacity-10"></div>
+                        </div>
+                    </div>
+                    <div class="skeleton h-10 w-full opacity-5"></div>
+                </div>
             </div>
+            </div>
+
+            <!-- USERS SECTION -->
+            <div id="section-users" class="hidden">
+                <div class="bg-slate-950/30 rounded-[2rem] border border-white/5 overflow-hidden">
+                    <table class="w-full text-left">
+                        <thead class="bg-white/5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                            <tr>
+                                <th class="p-6">User Phone</th>
+                                <th class="p-6">Registered At</th>
+                                <th class="p-6 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody" class="divide-y divide-white/5">
+                            <!-- Users injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>    </div>
 
                 <div id="noResults" class="hidden py-20 flex flex-col items-center justify-center text-center">
                     <div class="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center text-3xl mb-4">🔍</div>
@@ -232,113 +286,255 @@
                 </div>
             </div>
 
-            <!-- AMBASSADORS SECTION -->
             <div id="section-ambassadors" class="hidden">
-                <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-xl font-bold text-slate-900">Registered Ambassadors</h3>
-                    <button onclick="openAmbassadorModal()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-5 py-2.5 rounded-xl shadow-lg shadow-blue-500/30 transition-all flex items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
-                        Add Ambassador
-                    </button>
-                </div>
                 
-                <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-slate-50 border-b border-slate-100 text-xs font-black text-slate-400 uppercase tracking-widest">
-                                    <th class="p-5 pl-6">Ambassador</th>
-                                    <th class="p-5">Location</th>
-                                    <th class="p-5">Workers Added</th>
-                                    <th class="p-5">Status</th>
-                                    <th class="p-5 pr-6 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="ambassadorsTableBody" class="divide-y divide-slate-100 text-sm font-medium text-slate-600">
-                                <tr><td colspan="5" class="p-8 text-center text-slate-400">Loading ambassadors...</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
+                <div class="bg-slate-950/30 rounded-[2.5rem] border border-white/5 overflow-hidden shadow-2xl">
+                    <table class="w-full text-left border-collapse">
+                        <thead class="bg-white/5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                            <tr>
+                                <th class="px-6 py-3 w-1/3">Ambassador</th>
+                                <th class="px-6 py-3">Location</th>
+                                <th class="px-6 py-3 text-center w-24">Workers</th>
+                                <th class="px-6 py-3 text-center w-32">Status</th>
+                                <th class="px-6 py-3 text-right w-24">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ambassadorsTableBody" class="divide-y divide-white/5">
+                            <tr><td colspan="5" class="p-20 text-center text-slate-500 font-bold uppercase tracking-widest text-[10px]">Loading ambassadors...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
-            <!-- Create Ambassador Modal -->
-            <div id="createAmbassadorModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-all opacity-0">
-                <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl p-6 transform scale-95 opacity-0 transition-all" id="ambModalContent">
-                    <div class="flex justify-between items-center mb-5">
-                        <h3 class="text-xl font-black text-slate-900">Add New Ambassador</h3>
-                        <button onclick="closeAmbassadorModal()" class="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-50 transition-colors">
+            <div id="createAmbassadorModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 p-4 transition-all opacity-0 backdrop-blur-md">
+                <div class="solid-card bg-[#0f172a] rounded-[2.5rem] w-full max-w-md shadow-2xl p-10 transform scale-95 opacity-0 transition-all border border-white/5" id="ambModalContent">
+                    <div class="flex justify-between items-center mb-8">
+                        <div>
+                            <h3 class="text-2xl font-black text-white">New Partner</h3>
+                            <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Authorize Ambassador</p>
+                        </div>
+                        <button onclick="closeAmbassadorModal()" class="text-slate-500 hover:text-white p-2 rounded-xl hover:bg-white/5 transition-all">
                             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
                         </button>
                     </div>
                     
-                    <form id="createAmbassadorForm" onsubmit="submitAmbassador(event)" class="space-y-4">
+                    <form id="createAmbassadorForm" onsubmit="submitAmbassador(event)" class="space-y-6">
                         <div>
-                            <label class="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5 ml-1">Full Name</label>
-                            <input type="text" id="ambName" required class="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                            <label class="block text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2 ml-1">Identity Details</label>
+                            <input type="text" id="ambName" required class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-white" placeholder="Full Name">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5 ml-1">WhatsApp Number</label>
-                            <input type="tel" id="ambPhone" required pattern="[0-9]{10}" placeholder="10-digit mobile" class="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                            <label class="block text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2 ml-1">WhatsApp Terminal</label>
+                            <input type="tel" id="ambPhone" required pattern="[0-9]{10}" placeholder="10 Digit Number" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-white">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5 ml-1">Area / Location</label>
-                            <input type="text" id="ambArea" required class="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all">
+                            <label class="block text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2 ml-1">Area Coverage</label>
+                            <input type="text" id="ambArea" required class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-white" placeholder="e.g. Vellore District">
                         </div>
                         <div>
-                            <label class="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5 ml-1">Login Password</label>
-                            <input type="password" id="ambPassword" required minlength="6" placeholder="Set a secure password (min 6 chars)" class="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all">
-                            <p class="text-[10px] text-slate-400 mt-1 ml-1">Ambassador will use this to login at /ambassador/login</p>
+                            <label class="block text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-2 ml-1">Terminal Password</label>
+                            <input type="password" id="ambPassword" required minlength="6" placeholder="••••••••" class="w-full bg-white/5 border border-white/10 p-4 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-white">
                         </div>
-                        <button type="submit" id="ambSubmitBtn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-500/30 transition-all mt-6 active:scale-95">
-                            Create Ambassador
+                        <button type="submit" id="ambSubmitBtn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl shadow-2xl shadow-indigo-500/20 transition-all mt-4 active:scale-95 uppercase tracking-widest text-xs">
+                            Authorize Partner
                         </button>
                     </form>
                 </div>
             </div>
 
-        </main>
-    </div>
+    <div id="toast-container" class="fixed bottom-10 right-10 z-[200] space-y-3"></div>
 
     <script>
         let allWorkers = [];
+        let allUsers = [];
+        let allAmbassadors = [];
         let currentFilter = 'all';
-        let refreshInterval = null;
+        let socket = null;
+        let searchTimeout = null;
+        let growthChart = null;
+        let activeTab = 'workers';
 
         document.addEventListener('DOMContentLoaded', () => {
             if (localStorage.getItem('nearva_admin_logged_in') === 'true') {
                 showDashboard();
             }
+            
+            document.getElementById('workerSearch').addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    if (activeTab === 'workers') applyFilters();
+                    else if (activeTab === 'users') renderUsersTable();
+                }, 300);
+            });
         });
 
-
-
-        function showModal(title, msg, onConfirm) {
-            const modal = document.getElementById('confirmModal');
-            const content = document.getElementById('modalContent');
-            const confirmBtn = document.getElementById('modalConfirmBtn');
-
-            document.getElementById('modalTitle').textContent = title;
-            document.getElementById('modalMsg').textContent = msg;
-
-            modal.classList.remove('hidden');
+        function showToast(msg, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const colors = type === 'success' ? 'bg-emerald-500 shadow-emerald-500/20' : 'bg-red-500 shadow-red-500/20';
+            toast.className = `${colors} text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest shadow-2xl animate-up`;
+            toast.textContent = msg;
+            container.appendChild(toast);
             setTimeout(() => {
-                content.classList.remove('scale-95', 'opacity-0');
-                content.classList.add('scale-100', 'opacity-100');
-            }, 10);
-
-            confirmBtn.onclick = () => {
-                onConfirm();
-                closeModal();
-            };
+                toast.classList.add('fade-out');
+                setTimeout(() => toast.remove(), 500);
+            }, 3000);
         }
 
-        function closeModal() {
-            const modal = document.getElementById('confirmModal');
-            const content = document.getElementById('modalContent');
-            content.classList.remove('scale-100', 'opacity-100');
-            content.classList.add('scale-95', 'opacity-0');
-            setTimeout(() => modal.classList.add('hidden'), 200);
+        function initRealtime() {
+            if (socket) return;
+            socket = io();
+            socket.on('connect', () => {
+                console.log('Terminal Sync: Established');
+                socket.emit('join', { is_admin: true });
+            });
+            socket.on('admin_event', (event) => handleRealtimeUpdate(event));
+        }
+
+        function handleRealtimeUpdate(event) {
+            const { type, data } = event;
+            const indicator = document.getElementById('refresh-indicator');
+            indicator.classList.remove('hidden');
+            
+            if (type === 'worker_created' || type === 'worker_deleted' || type === 'worker_updated') {
+                loadWorkers(true);
+            } else if (type === 'user_created' || type === 'user_deleted') {
+                loadUsers(true);
+            } else if (type === 'job_completed') {
+                showToast("System: Transaction Settlement Detected", "success");
+            }
+
+            loadAnalytics(true);
+            setTimeout(() => indicator.classList.add('hidden'), 2000);
+        }
+
+        function initGrowthChart(chartData) {
+            const ctx = document.getElementById('growthChart').getContext('2d');
+            if (growthChart) growthChart.destroy();
+
+            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+            gradient.addColorStop(0, 'rgba(99, 102, 241, 0.2)');
+            gradient.addColorStop(1, 'rgba(99, 102, 241, 0)');
+
+            growthChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartData.labels,
+                    datasets: [
+                        {
+                            label: 'Users',
+                            data: chartData.user_counts,
+                            borderColor: '#6366f1',
+                            borderWidth: 3,
+                            fill: true,
+                            backgroundColor: gradient,
+                            tension: 0.4,
+                            pointRadius: 0,
+                            pointHoverRadius: 6,
+                            pointHoverBackgroundColor: '#6366f1',
+                            pointHoverBorderColor: '#fff',
+                            pointHoverBorderWidth: 2
+                        },
+                        {
+                            label: 'Workers',
+                            data: chartData.worker_counts,
+                            borderColor: '#94a3b8',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            fill: false,
+                            tension: 0.4,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+                    scales: {
+                        y: { 
+                            grid: { color: 'rgba(255,255,255,0.03)', drawBorder: false },
+                            ticks: { color: '#64748b', font: { size: 10, weight: '700' }, padding: 10 }
+                        },
+                        x: { 
+                            grid: { display: false },
+                            ticks: { color: '#64748b', font: { size: 10, weight: '700' }, padding: 10 }
+                        }
+                    }
+                }
+            });
+        }
+
+        function loadAnalytics(isSilent = false) {
+            const row = document.getElementById('analytics-row');
+            fetch('/api/admin/analytics')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) throw new Error(data.error);
+                    
+                    const growthHtml = (val) => val >= 0 
+                        ? `<span class="text-[10px] font-black text-emerald-400 ml-2">↑ ${val}%</span>` 
+                        : `<span class="text-[10px] font-black text-red-500 ml-2">↓ ${Math.abs(val)}%</span>`;
+
+                    row.innerHTML = `
+                        <div class="solid-card p-6 rounded-[2rem] min-h-[140px] flex flex-col justify-between transition-all hover:bg-white/5 group">
+                            <div>
+                                <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Users</h4>
+                                <div class="flex items-end">
+                                    <span class="text-3xl font-black text-white group-hover:text-indigo-400 transition-colors">${data.total_users || 0}</span>
+                                    ${growthHtml(data.growth.users)}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="solid-card p-6 rounded-[2rem] min-h-[140px] flex flex-col justify-between transition-all hover:bg-white/5 group">
+                            <div>
+                                <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Workers</h4>
+                                <div class="flex items-end">
+                                    <span class="text-3xl font-black text-white group-hover:text-indigo-400 transition-colors">${data.total_workers || 0}</span>
+                                    ${growthHtml(data.growth.workers)}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="solid-card p-6 rounded-[2rem] min-h-[140px] flex flex-col justify-between transition-all hover:bg-white/5 group">
+                            <div>
+                                <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Online Now</h4>
+                                <div class="flex items-end">
+                                    <span class="text-3xl font-black text-emerald-400">${data.online_workers || 0}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="solid-card p-6 rounded-[2rem] min-h-[140px] flex flex-col justify-between transition-all hover:bg-white/5 group">
+                            <div>
+                                <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Active Jobs</h4>
+                                <div class="flex items-end">
+                                    <span class="text-3xl font-black text-white group-hover:text-indigo-400 transition-colors">${data.active_jobs || 0}</span>
+                                    ${growthHtml(data.growth.jobs)}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    document.getElementById('wallet-total').textContent = `₹${(data.revenue.total || 0).toLocaleString()}`;
+                    document.getElementById('revenue-worker').textContent = `₹${(data.revenue.worker_share || 0).toLocaleString()}`;
+                    document.getElementById('revenue-admin').textContent = `₹${(data.revenue.admin_share || 0).toLocaleString()}`;
+
+                    if (!isSilent && data.chart) initGrowthChart(data.chart);
+                    else if (isSilent && data.chart && growthChart) {
+                        growthChart.data.datasets[0].data = data.chart.user_counts;
+                        growthChart.data.datasets[1].data = data.chart.worker_counts;
+                        growthChart.update('none');
+                    }
+                })
+                .catch(err => {
+                    console.error("Analytics failed:", err);
+                    if (!isSilent) {
+                        row.innerHTML = `
+                            <div class="col-span-full py-10 text-center solid-card bg-red-500/5 border-red-500/20">
+                                <p class="text-xs font-black text-red-400 uppercase tracking-widest">Platform Sync Error: Data Temporarily Unavailable</p>
+                            </div>
+                        `;
+                    }
+                });
         }
 
         function login() {
@@ -347,7 +543,7 @@
             formData.append('password', password);
             const btn = document.getElementById('loginBtn');
             btn.disabled = true;
-            btn.innerHTML = '<span class="flex items-center justify-center gap-2"><svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Verifying...</span>';
+            btn.innerHTML = 'Verifying...';
 
             fetch('/api/admin/login', { method: 'POST', body: formData })
                 .then(res => res.json())
@@ -357,14 +553,9 @@
                         showDashboard();
                     } else {
                         btn.disabled = false;
-                        btn.textContent = 'Login to Dashboard';
+                        btn.textContent = 'Authorize Session';
                         document.getElementById('errorMsg').classList.remove('hidden');
                     }
-                })
-                .catch(() => {
-                    btn.disabled = false;
-                    btn.textContent = 'Login to Dashboard';
-                    showToast('Connection failed', 'error');
                 });
         }
 
@@ -372,11 +563,9 @@
             document.getElementById('loginModal').classList.add('hidden');
             document.getElementById('dashboard').classList.remove('hidden');
             loadWorkers();
+            loadUsers();
             loadAnalytics();
-            // Start silent refresh
-            if (!refreshInterval) {
-                refreshInterval = setInterval(() => { loadWorkers(true); loadAnalytics(); }, 30000);
-            }
+            initRealtime();
         }
 
         function logout() {
@@ -384,30 +573,51 @@
             window.location.href = '/api/admin/logout';
         }
 
-        function loadWorkers(isSilent = false) {
-            const indicator = document.getElementById('refresh-indicator');
-            if (isSilent) indicator.classList.remove('hidden');
+        function switchTab(tab) {
+            activeTab = tab;
+            const sections = ['workers', 'users', 'ambassadors'];
+            sections.forEach(s => {
+                const el = document.getElementById(`section-${s}`);
+                if (el) el.classList.add('hidden');
+                const t = document.getElementById(`tab-${s}`);
+                if (t) t.className = "pb-2 text-sm font-bold border-b-2 border-transparent text-slate-500 hover:text-white transition-all";
+            });
 
+            document.getElementById(`section-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-${tab}`).className = "pb-2 text-sm font-bold border-b-2 border-indigo-500 text-white transition-all";
+            
+            const titleMap = { 'workers': 'Worker Network', 'users': 'User Base', 'ambassadors': 'Community Partners' };
+            document.getElementById('admin-title').textContent = titleMap[tab];
+            document.getElementById('admin-title').classList.add('text-white');
+
+            // Header Action Button Visibility
+            const headerBtn = document.getElementById('header-action-btn');
+            if(tab === 'ambassadors') {
+                headerBtn.classList.remove('hidden');
+            } else {
+                headerBtn.classList.add('hidden');
+            }
+
+            if (tab === 'ambassadors') loadAmbassadors();
+        }
+
+        function loadWorkers(isSilent = false) {
             fetch('/api/admin/workers')
                 .then(res => res.json())
                 .then(data => {
                     allWorkers = data;
                     applyFilters();
-                    setTimeout(() => indicator.classList.add('hidden'), 2000);
-                })
-                .catch(err => {
-                    if (!isSilent) showToast('Failed to load workers', 'error');
                 });
         }
 
         function setFilter(filter) {
             currentFilter = filter;
             document.querySelectorAll('.filter-chip').forEach(btn => {
-                btn.classList.remove('bg-slate-900', 'text-white', 'shadow-lg', 'shadow-slate-200', 'active');
-                btn.classList.add('bg-white', 'border', 'border-slate-200', 'text-slate-600');
+                btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-lg', 'shadow-indigo-500/20', 'active');
+                btn.classList.add('bg-white/5', 'border', 'border-white/5', 'text-slate-400');
                 if (btn.dataset.filter === filter) {
-                    btn.classList.add('bg-slate-900', 'text-white', 'shadow-lg', 'shadow-slate-200', 'active');
-                    btn.classList.remove('bg-white', 'border', 'border-slate-200', 'text-slate-600');
+                    btn.classList.add('bg-indigo-600', 'text-white', 'shadow-lg', 'shadow-indigo-500/20', 'active');
+                    btn.classList.remove('bg-white/5', 'border', 'border-white/5', 'text-slate-400');
                 }
             });
             applyFilters();
@@ -421,10 +631,8 @@
             let filtered = allWorkers.filter(w => {
                 const nameMatch = w.name.toLowerCase().includes(query) || w.service.toLowerCase().includes(query) || w.phone.includes(query);
                 if (!nameMatch) return false;
-
                 if (currentFilter === 'all') return true;
                 if (currentFilter === 'online') return w.is_online;
-                if (currentFilter === 'offline') return !w.is_online;
                 return w.account_status === currentFilter;
             });
 
@@ -435,88 +643,265 @@
 
         function renderGrid(workers) {
             const grid = document.getElementById('workerGrid');
-            grid.innerHTML = '';
+            grid.innerHTML = workers.map(w => {
+                const status = w.account_status || 'Pending';
+                let badgeClass = 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20';
+                if (status === 'Approved') badgeClass = 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20';
+                if (status === 'Rejected') badgeClass = 'bg-red-500/10 text-red-500 border-red-500/20';
 
-            workers.forEach(w => {
-                const isOnline = w.is_online;
-                const accStatus = w.account_status || 'Pending';
-
-                let badgeClass = 'bg-yellow-50 text-yellow-700 border-yellow-100';
-                if (accStatus === 'Approved') badgeClass = 'bg-green-50 text-green-700 border-green-100';
-                if (accStatus === 'Rejected') badgeClass = 'bg-red-50 text-red-700 border-red-100';
-
-                const card = document.createElement('div');
-                card.id = `worker-${w.id}`;
-                card.className = "group bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-300 relative overflow-hidden";
-
-                card.innerHTML = `
-                    <div class="flex items-start justify-between mb-5">
-                        <div class="flex items-center gap-4">
-                            <div class="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-xl font-black text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-all overflow-hidden border border-slate-100">
-                                ${w.profile_photo ?
-                        `<img src="${w.profile_photo}" class="w-full h-full object-cover">` :
-                        w.name.charAt(0)
-                    }
+                return `
+                    <div id="worker-${w.id}" class="solid-card p-6 flex flex-col justify-between group transition-all">
+                        <div>
+                            <div class="flex items-start justify-between mb-5">
+                                <div class="flex items-center gap-4">
+                                    <div class="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center text-lg font-black text-indigo-400 border border-white/5">
+                                        ${w.profile_photo ? `<img src="${w.profile_photo}" class="w-full h-full object-cover rounded-xl">` : w.name.charAt(0)}
+                                    </div>
+                                    <div>
+                                        <h3 class="font-bold text-white truncate max-w-[100px]">${w.name}</h3>
+                                        <p class="text-[9px] font-black text-indigo-400 uppercase tracking-widest">${w.service}</p>
+                                    </div>
+                                </div>
+                                <span class="px-2 py-1 text-[9px] font-black border rounded-lg uppercase tracking-wider ${badgeClass}">
+                                    ${status}
+                                </span>
                             </div>
-                            <div>
-                                <h3 class="font-bold text-slate-900 truncate max-w-[120px]" title="${w.name}">${w.name}</h3>
-                                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">${w.service}</p>
-                                ${w.ambassadors ? `<p class="text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 flex items-center gap-1 rounded-sm inline-flex mt-1.5 uppercase tracking-wider"><svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>${w.ambassadors.name}</p>` : ''}
-                            </div>
-                        </div>
-                        <div class="flex flex-col items-end gap-2">
-                            <span class="px-3 py-1 text-[9px] font-black border rounded-full uppercase tracking-wider ${badgeClass}">
-                                ${accStatus}
-                            </span>
-                            <div class="flex items-center gap-1.5 px-2 py-0.5 rounded-full ${isOnline ? 'bg-green-50 text-green-600' : 'bg-slate-50 text-slate-400'}">
-                                <span class="w-1 h-1 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-slate-300'}"></span>
-                                <span class="text-[8px] font-black uppercase tracking-tighter">${isOnline ? 'Online' : 'Offline'}</span>
+                            <div class="space-y-2 mb-4">
+                                <div class="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                                    <span>📱</span> ${w.phone}
+                                </div>
+                                <div class="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                                    <span>📍</span> ${w.area || 'Unknown'}
+                                </div>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="space-y-3 mb-6">
-                        <div class="flex items-center gap-3 text-sm font-medium text-slate-500">
-                            <span class="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center">📱</span>
-                            ${w.phone}
-                        </div>
-                        <div class="flex items-center gap-3 text-sm font-medium text-slate-500">
-                            <span class="w-8 h-8 rounded-xl bg-slate-50 flex items-center justify-center">📍</span>
-                            <span class="truncate max-w-[180px]">${w.area || 'Unknown Area'}</span>
-                        </div>
-                        <div class="text-[9px] font-bold text-slate-400 pl-11">
-                            Added ${formatTime(w.created_at)}
-                        </div>
-                    </div>
-
-                    <div class="pt-4 border-t border-slate-50 flex items-center justify-between">
-                        <div class="flex gap-2">
-                            ${accStatus !== 'Approved' ? `
-                                <button onclick="updateStatus('${w.id}', 'approve', this)" 
-                                        class="action-btn text-[11px] font-black text-green-600 hover:bg-green-50 px-3 py-2 rounded-xl transition-all">
-                                    APPROVE
+                        <div class="pt-4 border-t border-white/5 flex items-center justify-between">
+                            <div class="flex gap-4">
+                                <button onclick="updateStatus('${w.id}', '${status === 'Approved' ? 'reject' : 'approve'}')" 
+                                        class="text-[10px] font-black ${status === 'Approved' ? 'text-red-400' : 'text-emerald-400'} uppercase tracking-widest btn-instant">
+                                    ${status === 'Approved' ? 'Reject' : 'Approve'}
                                 </button>
-                            ` : ''}
-                            ${accStatus !== 'Rejected' ? `
-                                <button onclick="confirmReject('${w.id}', this)" 
-                                        class="action-btn text-[11px] font-black text-red-600 hover:bg-red-50 px-3 py-2 rounded-xl transition-all">
-                                    REJECT
-                                </button>
-                            ` : ''}
+                            </div>
+                            <button onclick="confirmDelete('${w.id}')" class="text-slate-600 hover:text-red-500 transition-all btn-instant">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </button>
                         </div>
-                        <button onclick="confirmDelete('${w.id}', this)" 
-                                class="action-btn w-10 h-10 rounded-xl flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                        </button>
-                    </div>
-
-                    <!-- Overlay Spinner -->
-                    <div id="loading-${w.id}" class="absolute inset-0 bg-white/60 backdrop-blur-[1px] hidden items-center justify-center z-10 transition-all">
-                        <svg class="animate-spin h-6 w-6 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                     </div>
                 `;
-                grid.appendChild(card);
+            }).join('');
+        }
+
+        function updateStatus(id, action) {
+            // Optimistic UI Update
+            const worker = allWorkers.find(w => w.id === id);
+            const oldStatus = worker.account_status;
+            if (worker) {
+                worker.account_status = action === 'approve' ? 'Approved' : 'Rejected';
+                applyFilters();
+                showToast(`System: ${action === 'approve' ? 'Authorized' : 'Restricted'}`, 'success');
+            }
+
+            fetch(`/api/admin/${action}/${id}`, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status !== 'success') {
+                        // Rollback on failure
+                        worker.account_status = oldStatus;
+                        applyFilters();
+                        showToast(`Error: Operation failed`, 'error');
+                    } else {
+                        loadAnalytics(true);
+                    }
+                });
+        }
+
+        function confirmDelete(id) {
+            showModal("System Override", "Permanently purge this asset from the cluster?", () => {
+                // Optimistic UI
+                const originalWorkers = [...allWorkers];
+                allWorkers = allWorkers.filter(w => w.id !== id);
+                applyFilters();
+                showToast("System: Asset Purged", "success");
+
+                fetch(`/api/admin/delete/${id}`, { method: 'DELETE' })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status !== 'success') {
+                            allWorkers = originalWorkers;
+                            applyFilters();
+                            showToast("Error: Purge failed", "error");
+                        } else {
+                            loadAnalytics(true);
+                        }
+                    });
             });
+        }
+
+        function loadUsers(isSilent = false) {
+            fetch('/api/admin/users')
+                .then(res => res.json())
+                .then(data => {
+                    allUsers = data;
+                    renderUsersTable();
+                });
+        }
+
+        function renderUsersTable() {
+            const query = document.getElementById('workerSearch').value.toLowerCase();
+            const tbody = document.getElementById('usersTableBody');
+            const filtered = allUsers.filter(u => u.phone.includes(query));
+            
+            tbody.innerHTML = filtered.map(u => `
+                <tr class="group hover:bg-white/5 transition-all">
+                    <td class="p-6">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-[10px] font-black text-indigo-400">U</div>
+                            <span class="font-bold text-white tracking-tight">${u.phone}</span>
+                        </div>
+                    </td>
+                    <td class="p-6 text-xs text-slate-500 font-bold">${formatTime(u.created_at)}</td>
+                    <td class="p-6 text-right">
+                        <button onclick="deleteUser('${u.id}')" class="p-2 text-slate-600 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+            if (filtered.length === 0) tbody.innerHTML = '<tr><td colspan="3" class="p-10 text-center text-slate-500 text-xs font-bold uppercase tracking-widest">No matching users</td></tr>';
+        }
+
+        function deleteUser(id) {
+            showModal("System Override", "Purge user identity from platform?", () => {
+                // Optimistic UI
+                const originalUsers = [...allUsers];
+                allUsers = allUsers.filter(u => u.id !== id);
+                renderUsersTable();
+                showToast("System: Identity Purged", "success");
+
+                fetch(`/api/admin/users/${id}`, { method: 'DELETE' })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.status !== 'success') {
+                            allUsers = originalUsers;
+                            renderUsersTable();
+                            showToast("Error: Identity purge failed", "error");
+                        }
+                    });
+            });
+        }
+
+        function loadAmbassadors() {
+            const tbody = document.getElementById('ambassadorsTableBody');
+            fetch('/api/admin/ambassadorsList')
+                .then(res => res.json())
+                .then(data => {
+                    allAmbassadors = Array.isArray(data) ? data : [];
+                    renderAmbassadors();
+                });
+        }
+
+        function renderAmbassadors() {
+            const tbody = document.getElementById('ambassadorsTableBody');
+            tbody.innerHTML = allAmbassadors.map(amb => `
+                <tr class="group hover:bg-white/5 transition-all">
+                    <td class="px-6 py-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-[10px] font-black text-indigo-400">A</div>
+                            <div>
+                                <div class="font-bold text-white text-xs tracking-tight">${amb.name}</div>
+                                <div class="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">${amb.phone}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-3">
+                        <div class="flex items-center gap-2">
+                            <div class="w-1.5 h-1.5 rounded-full bg-slate-600"></div>
+                            <span class="text-slate-400 font-bold text-[10px]">${amb.area || 'Region Unset'}</span>
+                        </div>
+                    </td>
+                    <td class="px-6 py-3 text-center">
+                        <span class="inline-flex items-center justify-center bg-indigo-500/10 text-indigo-400 font-black px-2.5 py-1 rounded-lg text-[10px] border border-indigo-500/20">
+                            ${amb.worker_count || 0}
+                        </span>
+                    </td>
+                    <td class="px-6 py-3 text-center">
+                        <button onclick="toggleAmbassador('${amb.id}')" class="px-3 py-1.5 text-[9px] font-black border rounded-lg uppercase tracking-widest transition-all ${amb.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20' : 'bg-slate-500/10 text-slate-400 border-white/5 hover:bg-white/5'}">
+                            ${amb.status}
+                        </button>
+                    </td>
+                    <td class="px-6 py-3 text-right">
+                        <button onclick="confirmDeleteAmbassador('${amb.id}')" class="p-2 text-slate-600 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100">
+                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function toggleAmbassador(id) {
+            // Optimistic UI
+            const amb = allAmbassadors.find(a => a.id === id);
+            const oldStatus = amb.status;
+            if (amb) {
+                amb.status = amb.status === 'active' ? 'inactive' : 'active';
+                renderAmbassadors();
+                showToast("System: Access level toggled", "success");
+            }
+
+            fetch(`/api/admin/ambassadors/${id}/toggle`, { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        amb.status = oldStatus;
+                        renderAmbassadors();
+                        showToast("Error: Toggle failed", "error");
+                    }
+                });
+        }
+
+        function confirmDeleteAmbassador(id) {
+            showModal("System Override", "Decommission this community partner?", () => {
+                // Optimistic UI
+                const originalAmbassadors = [...allAmbassadors];
+                allAmbassadors = allAmbassadors.filter(a => a.id !== id);
+                renderAmbassadors();
+                showToast("System: Partner Decommissioned", "success");
+
+                fetch(`/api/admin/ambassadors/${id}`, { method: 'DELETE' })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.error) {
+                            allAmbassadors = originalAmbassadors;
+                            renderAmbassadors();
+                            showToast("Error: Decommission failed", "error");
+                        }
+                    });
+            });
+        }
+
+        function submitAmbassador(e) {
+            e.preventDefault();
+            const btn = document.getElementById('ambSubmitBtn');
+            btn.disabled = true;
+            btn.textContent = 'Synchronizing...';
+            
+            const formData = new FormData();
+            formData.append('name', document.getElementById('ambName').value);
+            formData.append('phone', document.getElementById('ambPhone').value);
+            formData.append('area', document.getElementById('ambArea').value);
+            formData.append('password', document.getElementById('ambPassword').value);
+
+            fetch('/api/admin/ambassadors', { method: 'POST', body: formData })
+                .then(res => res.json())
+                .then(data => {
+                    btn.disabled = false;
+                    btn.textContent = 'Authorize Partner';
+                    if(data.status === 'success') {
+                        showToast('System: Partner Authorized', 'success');
+                        closeAmbassadorModal();
+                        loadAmbassadors();
+                    }
+                });
         }
 
         function formatTime(isoString) {
@@ -524,196 +909,42 @@
             const date = new Date(isoString);
             const now = new Date();
             const diffInSeconds = Math.floor((now - date) / 1000);
-
             if (diffInSeconds < 60) return 'just now';
             if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
             if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
             return date.toLocaleDateString();
         }
 
-        function toggleLoading(id, show) {
-            const overlay = document.getElementById(`loading-${id}`);
-            const card = document.getElementById(`worker-${id}`);
-            if (overlay) {
-                overlay.style.display = show ? 'flex' : 'none';
-                if (card) card.style.pointerEvents = show ? 'none' : 'auto';
-            }
+        function showModal(title, msg, onConfirm) {
+            const modal = document.getElementById('confirmModal');
+            const content = document.getElementById('modalContent');
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalMsg').textContent = msg;
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                content.classList.remove('scale-95', 'opacity-0');
+                content.classList.add('scale-100', 'opacity-100');
+            }, 10);
+            document.getElementById('modalConfirmBtn').onclick = () => {
+                onConfirm();
+                closeModal();
+            };
         }
 
-        function updateStatus(id, action, btn) {
-            toggleLoading(id, true);
-
-            fetch(`/api/admin/${action}/${id}`, { method: 'POST' })
-                .then(res => res.json())
-                .then(data => {
-                    toggleLoading(id, false);
-                    if (data.status === 'success') {
-                        // Update local state for immediate feedback
-                        const worker = allWorkers.find(w => w.id === id);
-                        if (worker) {
-                            worker.account_status = action === 'approve' ? 'Approved' : 'Rejected';
-                        }
-                        showToast(`Worker ${action === 'approve' ? 'Approved' : 'Rejected'}`, 'success');
-                        applyFilters();
-                    }
-                })
-                .catch(() => {
-                    toggleLoading(id, false);
-                    showToast('Action failed', 'error');
-                });
-        }
-
-        function confirmReject(id, btn) {
-            showModal(
-                'Reject Worker?',
-                'Are you sure you want to reject this registration? They will no longer appear on the map.',
-                () => updateStatus(id, 'reject', btn)
-            );
-        }
-
-        function confirmDelete(id, btn) {
-            showModal(
-                'Permanently Delete?',
-                'This will completely remove the worker from the database. This action is irreversible.',
-                () => {
-                    toggleLoading(id, true);
-                    fetch(`/api/admin/delete/${id}`, { method: 'DELETE' })
-                        .then(res => res.json())
-                        .then(data => {
-                            if (data.status === 'success') {
-                                const card = document.getElementById(`worker-${id}`);
-                                card.classList.add('fade-out');
-                                setTimeout(() => {
-                                    allWorkers = allWorkers.filter(w => w.id !== id);
-                                    showToast('Worker Deleted', 'success');
-                                    applyFilters();
-                                }, 500);
-                            }
-                        })
-                        .catch(() => {
-                            toggleLoading(id, false);
-                            showToast('Delete failed', 'error');
-                        });
-                }
-            );
-        }
-
-        // --- AMBASSADOR LOGIC ---
-        let allAmbassadors = [];
-
-        function switchTab(tab) {
-            document.getElementById('section-workers').classList.add('hidden');
-            document.getElementById('section-ambassadors').classList.add('hidden');
-            
-            document.getElementById('tab-workers').className = "pb-2 text-sm font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-900 transition-colors";
-            document.getElementById('tab-ambassadors').className = "pb-2 text-sm font-bold border-b-2 border-transparent text-slate-500 hover:text-slate-900 transition-colors";
-
-            if (tab === 'workers') {
-                document.getElementById('section-workers').classList.remove('hidden');
-                document.getElementById('tab-workers').className = "pb-2 text-sm font-bold border-b-2 border-slate-900 text-slate-900 transition-colors";
-                document.getElementById('admin-title').textContent = "Worker Management";
-            } else {
-                document.getElementById('section-ambassadors').classList.remove('hidden');
-                document.getElementById('tab-ambassadors').className = "pb-2 text-sm font-bold border-b-2 border-slate-900 text-slate-900 transition-colors";
-                document.getElementById('admin-title').textContent = "Community Ambassadors";
-                loadAmbassadors();
-            }
-        }
-
-        function loadAmbassadors() {
-            const tbody = document.getElementById('ambassadorsTableBody');
-            if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400">Loading...</td></tr>';
-
-            fetch('/api/admin/ambassadorsList')
-                .then(async res => {
-                    if (!res.ok) {
-                        if (res.status === 401 || res.status === 403) {
-                            logout();
-                            throw new Error("Session expired. Redirecting to login...");
-                        }
-                        
-                        let msg = `HTTP ${res.status}`;
-                        try {
-                            const errData = await res.json();
-                            msg = errData.error || errData.detail || errData.message || msg;
-                        } catch (e) {
-                            msg += ' (Invalid JSON response)';
-                        }
-                        throw new Error(msg);
-                    }
-                    const data = await res.json();
-                    if (data && data.status === 'error') {
-                        // Force logout if API rejects due to missing cookie
-                        if (data.message === 'Authentication error or backend failure.' || !data.message) {
-                            logout();
-                        }
-                        throw new Error(data.message || 'Authentication error or backend failure.');
-                    }
-                    return Array.isArray(data) ? data : [];
-                })
-                .then(data => {
-                    allAmbassadors = data;
-                    renderAmbassadors(data);
-                })
-                .catch(err => {
-                    if (tbody) tbody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-red-500 font-bold">Error: ${err.message || err.toString()}</td></tr>`;
-                });
-        }
-
-        function renderAmbassadors(ambassadors) {
-            const tbody = document.getElementById('ambassadorsTableBody');
-            tbody.innerHTML = '';
-            
-            if (!ambassadors || ambassadors.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400">No ambassadors found</td></tr>';
-                return;
-            }
-
-            ambassadors.forEach(amb => {
-            const count = amb.worker_count ?? 0;
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-slate-50/50 transition-colors group";
-                
-                const statusColor = amb.status === 'active' ? 'text-green-600 bg-green-50' : 'text-slate-500 bg-slate-100';
-                
-                tr.innerHTML = `
-                    <td class="p-5 pl-6">
-                        <div class="font-bold text-slate-900">${amb.name}</div>
-                        <div class="text-[11px] text-slate-400 mt-1">${amb.phone}</div>
-                    </td>
-                    <td class="p-5">${amb.area}</td>
-                    <td class="p-5">
-                        <span class="inline-flex items-center justify-center bg-blue-50 text-blue-700 font-bold w-7 h-7 rounded-lg text-xs shadow-sm">
-                            ${count}
-                        </span>
-                    </td>
-                    <td class="p-5">
-                        <span class="px-3 py-1 text-[10px] font-black border rounded-full uppercase tracking-wider ${statusColor}">
-                            ${amb.status}
-                        </span>
-                    </td>
-                    <td class="p-5 pr-6 text-right">
-                        <div class="flex items-center justify-end gap-2">
-                            <button onclick="toggleAmbassador('${amb.id}')" class="text-xs font-bold ${amb.status === 'active' ? 'text-orange-600 hover:bg-orange-50' : 'text-green-600 hover:bg-green-50'} px-3 py-2 rounded-xl transition-all border border-transparent">
-                                ${amb.status === 'active' ? 'Deactivate' : 'Activate'}
-                            </button>
-                            <button onclick="confirmDeleteAmbassador('${amb.id}', '${amb.name}')" class="w-9 h-9 rounded-xl flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                            </button>
-                        </div>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
+        function closeModal() {
+            const modal = document.getElementById('confirmModal');
+            const content = document.getElementById('modalContent');
+            content.classList.remove('scale-100', 'opacity-100');
+            content.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => modal.classList.add('hidden'), 200);
         }
 
         function openAmbassadorModal() {
             const modal = document.getElementById('createAmbassadorModal');
-            const content = document.getElementById('ambModalContent');
             modal.classList.remove('hidden');
             setTimeout(() => {
                 modal.classList.remove('opacity-0');
-                content.classList.remove('scale-95', 'opacity-0');
+                document.getElementById('ambModalContent').classList.remove('scale-95', 'opacity-0');
             }, 10);
         }
 
@@ -726,107 +957,6 @@
                 modal.classList.add('hidden');
                 document.getElementById('createAmbassadorForm').reset();
             }, 300);
-        }
-
-        function submitAmbassador(e) {
-            e.preventDefault();
-            const btn = document.getElementById('ambSubmitBtn');
-            btn.disabled = true;
-            btn.textContent = 'Saving...';
-            
-            const formData = new FormData();
-            formData.append('name', document.getElementById('ambName').value);
-            formData.append('phone', document.getElementById('ambPhone').value);
-            formData.append('area', document.getElementById('ambArea').value);
-            formData.append('password', document.getElementById('ambPassword').value);
-
-            fetch('/api/admin/ambassadors', { method: 'POST', body: formData })
-                .then(res => res.json())
-                .then(data => {
-                    btn.disabled = false;
-                    btn.textContent = 'Create Ambassador';
-                    if(data.status === 'success') {
-                        showToast('Ambassador Created', 'success');
-                        closeAmbassadorModal();
-                        loadAmbassadors();
-                    } else {
-                        showToast(data.message || 'Error occurred', 'error');
-                    }
-                })
-                .catch(() => {
-                    btn.disabled = false;
-                    btn.textContent = 'Create Ambassador';
-                    showToast('Network error', 'error');
-                });
-        }
-
-        function toggleAmbassador(id) {
-            fetch('/api/admin/ambassadors/' + id + '/toggle', { method: 'POST' })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'success') {
-                        showToast('Status updated to ' + data.new_status, 'success');
-                        loadAmbassadors();
-                    }
-                });
-        }
-
-        function confirmDeleteAmbassador(id, name) {
-            showModal(
-                'Delete Ambassador?',
-                `This will permanently delete "${name}" and remove their account access. This cannot be undone.`,
-                () => {
-                    fetch('/api/admin/ambassadors/' + id, { method: 'DELETE' })
-                        .then(res => res.json())
-                        .then(data => {
-                            if (data.status === 'success') {
-                                showToast('Ambassador deleted', 'success');
-                                loadAmbassadors();
-                            } else {
-                                showToast(data.message || 'Delete failed', 'error');
-                            }
-                        })
-                        .catch(() => showToast('Network error', 'error'));
-                }
-            );
-        }
-
-        // ── ANALYTICS ───────────────────────────────────────────────────────
-        function loadAnalytics() {
-            fetch('/api/admin/analytics')
-                .then(res => res.json())
-                .then(data => {
-                    const row = document.getElementById('analytics-row');
-                    if (!row) return;
-
-                    const cards = [
-                        { label:'Total Users',       value: data.total_users,       sub: 'Platform users',          icon:'👤', color:'blue'   },
-                        { label:'Total Workers',     value: data.total_workers,     sub: data.approved_workers + ' approved · ' + data.online_workers + ' online', icon:'🔧', color:'green'  },
-                        { label:'Active Jobs',       value: data.active_jobs,       sub: data.total_jobs + ' total requests',    icon:'📋', color:'orange' },
-                        { label:'Ambassadors',       value: data.total_ambassadors, sub: data.active_ambassadors + ' active',       icon:'🌟', color:'purple' },
-                    ];
-                    const colorMap = {
-                        blue:   { bg:'bg-blue-50',   text:'text-blue-600',   ring:'shadow-blue-100' },
-                        green:  { bg:'bg-green-50',  text:'text-green-600',  ring:'shadow-green-100' },
-                        orange: { bg:'bg-orange-50', text:'text-orange-600', ring:'shadow-orange-100' },
-                        purple: { bg:'bg-purple-50', text:'text-purple-600', ring:'shadow-purple-100' },
-                    };
-
-                    row.innerHTML = cards.map((c, i) => {
-                        const col = colorMap[c.color];
-                        return `<div class="analytics-card p-5" style="animation:countUp 0.5s cubic-bezier(0.16,1,0.3,1) ${i*0.06}s both">
-                            <div class="flex items-center justify-between mb-3">
-                                <span class="text-xs font-black text-slate-400 uppercase tracking-widest">${c.label}</span>
-                                <span class="w-8 h-8 ${col.bg} rounded-xl flex items-center justify-center text-sm shadow-sm ${col.ring}">${c.icon}</span>
-                            </div>
-                            <p class="text-3xl font-black text-slate-900 mb-1 count-animate">${c.value}</p>
-                            <p class="text-[11px] text-slate-400 font-medium">${c.sub}</p>
-                        </div>`;
-                    }).join('');
-                })
-                .catch(() => {
-                    // Keep skeleton on error
-                });
         }
     </script>
 </body>

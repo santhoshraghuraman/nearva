@@ -1194,38 +1194,42 @@
         });
 
         socket.on('connect', () => {
-            console.log('Connected');
-            // Join personal room for notifications
-            socket.emit('join', { user_id: USER_ID });
+            console.log('Connected to Real-time Sync Engine');
+            // Register in dedicated user room for state synchronization
+            socket.emit('register', { id: `user_${USER_ID}` });
+            
             // Join active chat if one is open
             if (currentChatId) {
                 socket.emit('join-room', { roomId: currentChatId });
-                console.log("Joined room:", currentChatId);
             }
         });
 
-        socket.on('receive-message', (data) => {
-            console.log("Message received:", data);
-            if (currentChatId === data.roomId && data.sender_id !== USER_ID) {
-                appendLiveMessage(data);
+        // ── CENTRALIZED SYSTEM EVENTS (Real-time Sync) ──
+        socket.on('system_event', (event) => {
+            console.log("System Event:", event.type, event.data);
+            
+            switch(event.type) {
+                case 'job_updated':
+                    loadUserJobs(); // Instant refresh when worker accepts/updates job
+                    if (event.data.status === 'accepted') {
+                        showToast("Worker Accepted Your Request! ⚡", "success");
+                    }
+                    break;
+                case 'receive-message':
+                    if (currentChatId === event.data.roomId && event.data.sender_id !== USER_ID) {
+                        appendLiveMessage(event.data);
+                    }
+                    break;
+                case 'notify_message':
+                    if (currentChatId !== event.data.roomId) {
+                        unreadCount++;
+                        updateUnreadBadge();
+                    }
+                    loadUserChats();
+                    break;
             }
         });
 
-        socket.on('message-deleted', (data) => {
-            console.log("Message deleted:", data);
-            if (currentChatId === data.roomId) {
-                const el = document.getElementById(`msg-${data.messageId}`);
-                if (el) el.remove();
-            }
-        });
-
-        socket.on('notify_message', (data) => {
-            console.log("Notification received:", data);
-            if (currentChatId !== data.roomId) {
-                if (window.updateUnreadBadge) window.updateUnreadBadge(true);
-            }
-            loadUserChats(); // Refresh lists
-        });
 
         socket.on('typing-status', (data) => {
             if (currentChatId === data.roomId) {
