@@ -277,13 +277,13 @@
                         </tbody>
                     </table>
                 </div>
-            </div>    </div>
+            </div>
 
-                <div id="noResults" class="hidden py-20 flex flex-col items-center justify-center text-center">
-                    <div class="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center text-3xl mb-4">🔍</div>
-                    <h3 class="text-xl font-bold text-slate-900 mb-1">No matching workers</h3>
-                    <p class="text-slate-500">Try adjusting your filters or search terms.</p>
-                </div>
+            <div id="noResults" class="hidden py-20 flex flex-col items-center justify-center text-center">
+                <div class="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center text-3xl mb-4">🔍</div>
+                <h3 class="text-xl font-bold text-slate-900 mb-1">No matching workers</h3>
+                <p class="text-slate-500">Try adjusting your filters or search terms.</p>
+            </div>
             </div>
 
             <div id="section-ambassadors" class="hidden">
@@ -580,11 +580,11 @@
                 const el = document.getElementById(`section-${s}`);
                 if (el) el.classList.add('hidden');
                 const t = document.getElementById(`tab-${s}`);
-                if (t) t.className = "pb-2 text-sm font-bold border-b-2 border-transparent text-slate-500 hover:text-white transition-all";
+                if (t) t.className = "pb-3 text-xs font-black uppercase tracking-widest border-b-2 border-transparent text-slate-500 hover:text-white transition-all duration-200";
             });
 
             document.getElementById(`section-${tab}`).classList.remove('hidden');
-            document.getElementById(`tab-${tab}`).className = "pb-2 text-sm font-bold border-b-2 border-indigo-500 text-white transition-all";
+            document.getElementById(`tab-${tab}`).className = "pb-3 text-xs font-black uppercase tracking-widest border-b-2 border-indigo-500 text-white transition-all duration-200";
             
             const titleMap = { 'workers': 'Worker Network', 'users': 'User Base', 'ambassadors': 'Community Partners' };
             document.getElementById('admin-title').textContent = titleMap[tab];
@@ -605,9 +605,10 @@
             fetch('/api/admin/workers')
                 .then(res => res.json())
                 .then(data => {
-                    allWorkers = data;
+                    allWorkers = Array.isArray(data) ? data : [];
                     applyFilters();
-                });
+                })
+                .catch(err => console.error("Sync Error [Workers]:", err));
         }
 
         function setFilter(filter) {
@@ -741,9 +742,10 @@
             fetch('/api/admin/users')
                 .then(res => res.json())
                 .then(data => {
-                    allUsers = data;
+                    allUsers = Array.isArray(data) ? data : [];
                     renderUsersTable();
-                });
+                })
+                .catch(err => console.error("Sync Error [Users]:", err));
         }
 
         function renderUsersTable() {
@@ -796,6 +798,12 @@
                 .then(res => res.json())
                 .then(data => {
                     allAmbassadors = Array.isArray(data) ? data : [];
+                    console.log("Terminal Sync: Ambassadors loaded", allAmbassadors.length);
+                    renderAmbassadors();
+                })
+                .catch(err => {
+                    console.error("Sync Error [Ambassadors]:", err);
+                    allAmbassadors = [];
                     renderAmbassadors();
                 });
         }
