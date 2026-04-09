@@ -1644,10 +1644,15 @@ async def admin_list_ambassadors(request: Request):
         amb_resp = await supabase_request("GET",
             "ambassadors?select=id,name,phone,area,status,referral_code,created_at&order=created_at.desc")
         
+        print(f"DEBUG [Admin]: Ambassadors Fetch Status: {amb_resp.status_code}")
+        if not amb_resp.is_success:
+            print(f"DEBUG [Admin]: Ambassadors Fetch Error: {amb_resp.text}")
+            
         ambassadors = amb_resp.json() if amb_resp.is_success else []
+        print(f"DEBUG [Admin]: Ambassadors Count: {len(ambassadors)}")
     except Exception as e:
         print(f"[ADMIN] Failed to load ambassadors: {e}")
-        return JSONResponse({"error": "Failed to load ambassadors. Please check DB migrations and RLS."}, status_code=500)
+        return JSONResponse({"error": f"Failed to load ambassadors: {str(e)}"}, status_code=500)
 
     # Step 2: Fetch worker counts per ambassador (safe separate query)
     if ambassadors:
@@ -1775,9 +1780,19 @@ async def public_ambassadors_list():
 @app.get("/api/admin/users")
 async def admin_list_users(request: Request):
     if not request.session.get("admin_logged_in"):
-        return JSONResponse({"status": "error"}, status_code=401)
+        print("DEBUG [Admin]: User list requested but admin not logged in session.")
+        return JSONResponse({"status": "error", "message": "Unauthorized"}, status_code=401)
+    
     resp = await supabase_request("GET", "users?select=*&order=created_at.desc")
-    return resp.json()
+    print(f"DEBUG [Admin]: Users Fetch Status: {resp.status_code}")
+    
+    if not resp.is_success:
+        print(f"DEBUG [Admin]: Users Fetch Error: {resp.text}")
+        return []
+        
+    data = resp.json()
+    print(f"DEBUG [Admin]: Users Count: {len(data)}")
+    return data
 
 @app.delete("/api/admin/users/{user_id}")
 async def admin_delete_user(user_id: str, request: Request):
