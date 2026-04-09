@@ -190,8 +190,8 @@ async def read_root(request: Request):
 @app.get("/api/workers")
 async def get_workers(category: str = "All", lat: float = None, lng: float = None):
     # Master Optimization: Fetch ONLY minimum required fields for map rendering
-    fields = "id,name,phone,service,experience,area,latitude,longitude,is_online,last_active,profile_photo,verification_status,ambassadors(name)"
-    query = f"workers?verification_status=eq.VERIFIED&latitude=not.is.null&longitude=not.is.null&select={fields}"
+    fields = "id,name,phone,service,experience,area,latitude,longitude,is_online,last_active,profile_photo,verification_status,subscription_status,ambassadors(name)"
+    query = f"workers?verification_status=eq.VERIFIED&subscription_status=neq.EXPIRED&latitude=not.is.null&longitude=not.is.null&select={fields}"
     
     # 1. Category Filtering
     if category != "All":
@@ -428,6 +428,12 @@ async def create_job_request(request: Request):
     if check.json():
         return JSONResponse({"status": "exists", "message": "Request already active."})
 
+    # ── Subscription Guard ──
+    worker_check = await supabase_request("GET", f"workers?id=eq.{worker_id}&select=subscription_status")
+    w_data = worker_check.json()
+    if w_data and w_data[0].get("subscription_status") == "EXPIRED":
+        return JSONResponse({"status": "error", "message": "Worker is currently unavailable (Subscription Expiry)."}, status_code=403)
+
     res = await supabase_request("POST", "job_requests", data={
         "user_id": user_id,
         "user_phone": user_phone,
@@ -478,6 +484,14 @@ async def get_user_jobs(user_id: str):
 
 @app.patch("/api/jobs/{job_id}/status")
 async def update_job_status(job_id: str, request: Request):
+    # ── Subscription Guard ──
+    worker_id = request.session.get("worker_id")
+    if worker_id:
+        worker_res = await supabase_request("GET", f"workers?id=eq.{worker_id}&select=subscription_status")
+        w_data = worker_res.json()
+        if w_data and w_data[0].get("subscription_status") == "EXPIRED":
+            return JSONResponse({"status": "error", "message": "Subscription required to manage jobs."}, status_code=403)
+
     try:
         body = await request.json()
         new_status = body.get("status", "")
@@ -1386,12 +1400,68 @@ async def get_worker_status(worker_id: str, request: Request):
     session_worker_id = request.session.get("worker_id")
     if not session_worker_id or session_worker_id != worker_id:
         return JSONResponse({"status": "error", "message": "Unauthorized access."}, status_code=403)
-    response = await supabase_request("GET", f"workers?id=eq.{worker_id}&select=verification_status,account_status,name,status,last_status_update,is_online,last_active")
+    
+    # ── Fetch All Critical Status Fields ──
+    response = await supabase_request("GET", 
+        f"workers?id=eq.{worker_id}&select=verification_status,account_status,name,status,last_status_update,is_online,last_active,created_at,subscription_status,subscription_expiry")
     workers = response.json()
     
-    if workers:
-        return {"status": "success", "worker": workers[0]}
-    return JSONResponse({"status": "error", "message": "Worker not found."}, status_code=404)
+    if not workers:
+        return JSONResponse({"status": "error", "message": "Worker not found."}, status_code=404)
+        
+    worker = workers[0]
+    
+    # ── Calculate Computed Subscription Status ──
+    from datetime import datetime, timezone, timedelta
+    now = datetime.now(timezone.utc)
+    
+    # Parse Created At (Handling Z or offset)
+    created_at_str = worker.get("created_at", now.isoformat())
+    created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+    
+    current_status = worker.get("subscription_status", "FREE")
+    expiry_str = worker.get("subscription_expiry")
+    expiry = datetime.fromisoformat(expiry_str.replace('Z', '+00:00')) if expiry_str else None
+    
+    computed_status = current_status
+    
+    if current_status == "FREE":
+        # Check 90 day limit
+        if now > (created_at + timedelta(days=90)):
+            computed_status = "EXPIRED"
+    elif current_status == "ACTIVE" and expiry:
+        # Check subscription expiry
+        if now > expiry:
+            computed_status = "EXPIRED"
+            
+    # Lazy update DB if status changed to EXPIRED
+    if computed_status == "EXPIRED" and current_status != "EXPIRED":
+        await supabase_request("PATCH", f"workers?id=eq.{worker_id}", data={"subscription_status": "EXPIRED"})
+        worker["subscription_status"] = "EXPIRED"
+    else:
+        worker["subscription_status"] = computed_status
+
+    return {"status": "success", "worker": worker}
+
+@app.post("/api/worker/subscribe")
+async def worker_subscribe(request: Request):
+    worker_id = request.session.get("worker_id")
+    if not worker_id:
+        return JSONResponse({"status": "error", "message": "Unauthorized"}, status_code=401)
+        
+    from datetime import datetime, timezone, timedelta
+    expiry = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+    
+    data = {
+        "subscription_status": "ACTIVE",
+        "subscription_expiry": expiry
+    }
+    
+    resp = await supabase_request("PATCH", f"workers?id=eq.{worker_id}", data=data)
+    if not resp.is_success:
+        return JSONResponse({"status": "error", "message": "Payment simulation failed"}, status_code=500)
+        
+    return {"status": "success", "message": "Subscription activated for 30 days", "expiry": expiry}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

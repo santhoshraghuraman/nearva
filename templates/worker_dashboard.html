@@ -262,6 +262,42 @@
         0% { transform: scale(0); }
         100% { transform: scale(1); }
     }
+    /* Subscription Overlay */
+    .subscription-overlay {
+        position: fixed;
+        inset: 0;
+        background: #111827;
+        z-index: 5000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 32px;
+        text-align: center;
+        animation: fadeIn 0.4s ease-out;
+    }
+    .sub-card {
+        background: #1f2937;
+        border: 1px solid rgba(255,255,255,0.05);
+        padding: 40px 24px;
+        border-radius: 32px;
+        box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        max-width: 400px;
+        width: 100%;
+        position: relative;
+        overflow: hidden;
+    }
+    .sub-card::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        left: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(59,130,246,0.1) 0%, transparent 70%);
+        pointer-events: none;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 </style>
 {% endblock %}
 
@@ -319,6 +355,30 @@
 {% block content %}
 
 <div id="wtoast"></div>
+
+<!-- Subscription Lock Overlay -->
+<div id="subscription-lock" class="subscription-overlay hidden">
+    <div class="sub-card slide-up">
+        <div class="w-20 h-20 bg-blue-600/20 rounded-3xl flex items-center justify-center mx-auto mb-6 border border-blue-500/30">
+            <span class="text-4xl">💎</span>
+        </div>
+        <h2 class="text-2xl font-black text-white mb-3">Subscription Required</h2>
+        <p class="text-sm text-gray-400 font-medium leading-relaxed mb-8">Your free access has expired. Subscribe to continue receiving jobs and appearing on the map.</p>
+        
+        <div class="bg-black/40 rounded-2xl p-4 mb-8 border border-white/5">
+            <div class="flex justify-between items-center">
+                <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">Membership Fee</span>
+                <span class="text-xl font-black text-white">₹299<span class="text-[10px] text-gray-500">/mo</span></span>
+            </div>
+        </div>
+
+        <button onclick="subscribeNow()" id="sub-btn" class="btn-primary-blue w-full h-16 text-sm uppercase tracking-widest flex items-center justify-center gap-3">
+            Subscribe Now
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        </button>
+        <p class="text-[9px] text-gray-600 mt-6 font-bold uppercase tracking-widest">Secured by Nearva Gateway</p>
+    </div>
+</div>
 
 <!-- Sidebar Overlay -->
 <div id="sidebar-overlay" onclick="toggleSidebar(false)" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[999] hidden"></div>
@@ -880,6 +940,23 @@
     // ── POLLING DATA ──
     async function pollData() {
         if (!workerId) return;
+        
+        // ── Subscription Check ──
+        const statusRes = await fetch(`/api/worker/status/${workerId}`).catch(()=>null);
+        if (statusRes && statusRes.ok) {
+            const sData = await statusRes.json();
+            if (sData.status === 'success') {
+                const subStatus = sData.worker.subscription_status;
+                const lockEl = document.getElementById('subscription-lock');
+                if (subStatus === 'EXPIRED') {
+                    lockEl.classList.remove('hidden');
+                    return; // Prevent further data loading
+                } else {
+                    lockEl.classList.add('hidden');
+                }
+            }
+        }
+
         const res = await fetch(`/api/jobs/worker/${workerId}`).catch(()=>null);
         if (!res || !res.ok) return;
         const data = await res.json();
@@ -1313,5 +1390,26 @@
         closeGPSModal();
         handleToggleChange(); // Retry the toggle flow
     };
+    async function subscribeNow() {
+        const btn = document.getElementById('sub-btn');
+        btn.disabled = true;
+        btn.innerHTML = `<span class="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></span> Processing...`;
+        
+        try {
+            const res = await fetch('/api/worker/subscribe', { method: 'POST' });
+            const data = await res.json();
+            if (data.status === 'success') {
+                showToast("Subscription Activated! 💎", "success");
+                pollData(); // Refresh and hide lock
+            } else {
+                showToast("Transaction failed", "error");
+            }
+        } catch(e) {
+            showToast("Sync error", "error");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = `Subscribe Now <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>`;
+        }
+    }
 </script>
 {% endblock %}
