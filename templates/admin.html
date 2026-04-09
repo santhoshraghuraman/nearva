@@ -586,6 +586,11 @@
             document.getElementById(`section-${tab}`).classList.remove('hidden');
             document.getElementById(`tab-${tab}`).className = "pb-3 text-xs font-black uppercase tracking-widest border-b-2 border-indigo-500 text-white transition-all duration-200";
             
+            if (tab === 'ambassadors') loadAmbassadors();
+            if (tab === 'users') loadUsers();
+            
+            // Re-apply search/filters search for the new tab
+            applyFilters();
             const titleMap = { 'workers': 'Worker Network', 'users': 'User Base', 'ambassadors': 'Community Partners' };
             document.getElementById('admin-title').textContent = titleMap[tab];
             document.getElementById('admin-title').classList.add('text-white');
@@ -597,8 +602,6 @@
             } else {
                 headerBtn.classList.add('hidden');
             }
-
-            if (tab === 'ambassadors') loadAmbassadors();
         }
 
         function loadWorkers(isSilent = false) {
@@ -625,21 +628,40 @@
         }
 
         function applyFilters() {
-            const query = document.getElementById('workerSearch').value.toLowerCase();
-            const grid = document.getElementById('workerGrid');
-            const noResults = document.getElementById('noResults');
+            // Determine active tab
+            const activeTab = document.querySelector('button[id^="tab-"].border-indigo-500')?.id?.replace('tab-', '') || 'workers';
+            
+            if (activeTab === 'workers') {
+                const query = document.getElementById('workerSearch').value.toLowerCase();
+                const filtered = allWorkers.filter(w => 
+                    w.name.toLowerCase().includes(query) || 
+                    w.phone.includes(query) || 
+                    w.service.toLowerCase().includes(query)
+                );
+                
+                let workersToShow = filtered;
+                if (currentFilter === 'online') workersToShow = filtered.filter(w => w.is_online);
+                if (currentFilter === 'pending') workersToShow = filtered.filter(w => w.verification_status === 'PENDING' || w.verification_status === 'UNDER_REVIEW');
+                
+                renderGrid(workersToShow);
+                document.getElementById('workerGrid').classList.toggle('hidden', workersToShow.length === 0);
+                document.getElementById('noResults').classList.toggle('hidden', workersToShow.length > 0);
+            } else if (activeTab === 'users') {
+                renderUsersTable();
+            } else if (activeTab === 'ambassadors') {
+                renderAmbassadors();
+            }
+        }
 
-            let filtered = allWorkers.filter(w => {
-                const nameMatch = w.name.toLowerCase().includes(query) || w.service.toLowerCase().includes(query) || w.phone.includes(query);
-                if (!nameMatch) return false;
-                if (currentFilter === 'all') return true;
-                if (currentFilter === 'online') return w.is_online;
-                return w.account_status === currentFilter;
-            });
-
-            renderGrid(filtered);
-            grid.classList.toggle('hidden', filtered.length === 0);
-            noResults.classList.toggle('hidden', filtered.length > 0);
+        async function manualSync() {
+            showToast('Synchronizing all data...');
+            await Promise.all([
+                loadWorkers(),
+                loadUsers(),
+                loadAmbassadors(),
+                loadAnalytics()
+            ]);
+            showToast('Real-time sync complete', 'success');
         }
 
         function renderGrid(workers) {
