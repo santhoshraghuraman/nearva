@@ -770,7 +770,9 @@ async def admin_logout(request: Request):
     return RedirectResponse(url="/admin")
 
 @app.get("/api/admin/workers")
-async def get_all_workers():
+async def get_all_workers(request: Request):
+    if not request.session.get("admin_logged_in"):
+        return JSONResponse({"status": "error", "message": "Unauthorized"}, status_code=401)
     response = await supabase_request("GET", "workers?select=*,ambassadors(name)&order=created_at.desc")
     return response.json()
 
@@ -1633,11 +1635,16 @@ async def action_worker_verification(worker_id: str, request: Request):
 # ═══════════════════════════════════════════════════════════════════════════════
 #  ADMIN – AMBASSADOR MANAGEMENT APIS
 # ═══════════════════════════════════════════════════════════════════════════════
+@app.get("/api/admin/status")
+async def admin_status(request: Request):
+    """Diagnostic endpoint to verify if the admin session is currently active."""
+    is_logged_in = request.session.get("admin_logged_in", False)
+    return JSONResponse({"logged_in": is_logged_in})
 
 @app.get("/api/admin/ambassadorsList")
 async def admin_list_ambassadors(request: Request):
     if not request.session.get("admin_logged_in"):
-        return JSONResponse({"status": "error"}, status_code=401)
+        return JSONResponse({"status": "error", "message": "Unauthorized"}, status_code=401)
         
     try:
         # Step 1: Fetch all ambassadors
@@ -1805,6 +1812,9 @@ async def admin_delete_user(user_id: str, request: Request):
 @app.get("/api/admin/analytics")
 async def admin_analytics(request: Request):
     """Real-time platform analytics with growth indicators and time-series data."""
+    if not request.session.get("admin_logged_in"):
+        return JSONResponse({"status": "error", "message": "Unauthorized"}, status_code=401)
+    
     cached = _get_cache("admin_analytics", ttl=5) # 5 seconds cache
     if cached: return JSONResponse(cached)
 

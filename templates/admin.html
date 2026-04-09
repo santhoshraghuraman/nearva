@@ -360,19 +360,43 @@
         let growthChart = null;
         let activeTab = 'workers';
 
-        document.addEventListener('DOMContentLoaded', () => {
-            if (localStorage.getItem('nearva_admin_logged_in') === 'true') {
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Priority 1: Check server session status first
+            const isAuthed = await checkSession();
+            
+            if (isAuthed) {
+                localStorage.setItem('nearva_admin_logged_in', 'true');
                 showDashboard();
+            } else {
+                localStorage.removeItem('nearva_admin_logged_in');
+                document.getElementById('loginModal').classList.remove('hidden');
             }
             
             document.getElementById('workerSearch').addEventListener('input', (e) => {
                 clearTimeout(searchTimeout);
                 searchTimeout = setTimeout(() => {
-                    if (activeTab === 'workers') applyFilters();
-                    else if (activeTab === 'users') renderUsersTable();
+                    applyFilters();
                 }, 300);
             });
         });
+
+        function handleUnauthorized() {
+            localStorage.removeItem('nearva_admin_logged_in');
+            document.getElementById('dashboard').classList.add('hidden');
+            document.getElementById('loginModal').classList.remove('hidden');
+            showToast("Session expired. Please authorize again.", "error");
+            return null;
+        }
+
+        async function checkSession() {
+            try {
+                const res = await fetch('/api/admin/status');
+                const data = await res.json();
+                return data.logged_in === true;
+            } catch (e) {
+                return false;
+            }
+        }
 
         function showToast(msg, type = 'success') {
             const container = document.getElementById('toast-container');
@@ -474,8 +498,12 @@
         function loadAnalytics(isSilent = false) {
             const row = document.getElementById('analytics-row');
             fetch('/api/admin/analytics')
-                .then(res => res.json())
+                .then(res => {
+                    if (res.status === 401) return handleUnauthorized();
+                    return res.json();
+                })
                 .then(data => {
+                    if (!data) return;
                     if (data.error) throw new Error(data.error);
                     
                     const growthHtml = (val) => val >= 0 
@@ -568,9 +596,13 @@
         function showDashboard() {
             document.getElementById('loginModal').classList.add('hidden');
             document.getElementById('dashboard').classList.remove('hidden');
+            
+            // Comprehensive Data Load
             loadWorkers();
             loadUsers();
+            loadAmbassadors();
             loadAnalytics();
+            
             initRealtime();
         }
 
@@ -614,12 +646,20 @@
 
         function loadWorkers(isSilent = false) {
             fetch('/api/admin/workers')
-                .then(res => res.json())
+                .then(res => {
+                    if (res.status === 401) return handleUnauthorized();
+                    return res.json();
+                })
                 .then(data => {
+                    if (!data) return;
+                    if (data.status === 'error') throw new Error(data.message);
                     allWorkers = Array.isArray(data) ? data : [];
                     applyFilters();
                 })
-                .catch(err => console.error("Sync Error [Workers]:", err));
+                .catch(err => {
+                    console.error("Sync Error [Workers]:", err);
+                    if (!isSilent) showToast("Worker synchronization failed", "error");
+                });
         }
 
         function setFilter(filter) {
@@ -770,12 +810,19 @@
 
         function loadUsers(isSilent = false) {
             fetch('/api/admin/users')
-                .then(res => res.json())
+                .then(res => {
+                    if (res.status === 401) return handleUnauthorized();
+                    return res.json();
+                })
                 .then(data => {
+                    if (data && data.status === 'error') throw new Error(data.message);
                     allUsers = Array.isArray(data) ? data : [];
                     renderUsersTable();
                 })
-                .catch(err => console.error("Sync Error [Users]:", err));
+                .catch(err => {
+                    console.error("Sync Error [Users]:", err);
+                    if (!isSilent) showToast("User synchronization failed", "error");
+                });
         }
 
         function renderUsersTable() {
@@ -836,15 +883,18 @@
 
         function loadAmbassadors() {
             fetch('/api/admin/ambassadorsList')
-                .then(res => res.json())
+                .then(res => {
+                    if (res.status === 401) return handleUnauthorized();
+                    return res.json();
+                })
                 .then(data => {
+                    if (data && data.status === 'error') throw new Error(data.message);
                     allAmbassadors = Array.isArray(data) ? data : [];
                     renderAmbassadors();
                 })
                 .catch(err => {
                     console.error("Sync Error [Ambassadors]:", err);
-                    allAmbassadors = [];
-                    renderAmbassadors();
+                    showToast("Ambassador synchronization failed", "error");
                 });
         }
 
