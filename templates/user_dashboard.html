@@ -30,11 +30,20 @@
         --amber:        #f59e0b;
     }
 
-    html { scroll-behavior: smooth; background: var(--bg-base); }
-    body { background: var(--bg-base); color: var(--text-primary); font-family: 'Inter', system-ui, -apple-system, sans-serif; min-height: 100vh; }
+    html { scroll-behavior: smooth; background: var(--bg-base); height: -webkit-fill-available; }
+    body { 
+        background: var(--bg-base); 
+        color: var(--text-primary); 
+        font-family: 'Inter', system-ui, -apple-system, sans-serif; 
+        min-height: 100vh;
+        min-height: -webkit-fill-available;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+    }
 
     .no-scrollbar::-webkit-scrollbar { display: none; }
-    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 
     /* ── Page Enter Animation ── */
     @keyframes slideUp { from { opacity:0; transform:translateY(22px); } to { opacity:1; transform:translateY(0); } }
@@ -131,7 +140,8 @@
         background: var(--bg-card);
         border: 1px solid var(--border);
         border-radius: 24px;
-        overflow: hidden;
+        /* Remove overflow:hidden to allow internal scrolling lists if needed or growth */
+        position: relative;
         box-shadow: 0 4px 15px -5px rgba(0,0,0,0.05);
     }
 
@@ -238,13 +248,18 @@
         transition: transform 0.38s cubic-bezier(0.16,1,0.3,1), opacity 0.35s ease;
         will-change: transform, opacity;
     }
-    #screen-chat { transform: translateX(100%); opacity: 0; pointer-events: none; }
+    #screen-chat { 
+        transform: translateX(100%); 
+        opacity: 0; 
+        pointer-events: none;
+        overflow-y: hidden; /* Internal list handles scroll */
+    }
     #screen-chat.active { transform: translateX(0); opacity: 1; pointer-events: auto; }
     #screen-main.hidden-left { transform: translateX(-40px); opacity: 0; pointer-events: none; }
 
     /* ── Tab Content ── */
-    .tab-pane { display: none; }
-    .tab-pane.active { display: block; }
+    .tab-pane { display: none !important; }
+    .tab-pane.active { display: block !important; }
 
     /* ── Avatar Gradient Colors ── */
     .av-blue   { background: linear-gradient(135deg,#6366f1,#4f46e5); }
@@ -361,78 +376,72 @@
     <!-- ── DASHBOARD CONTENT AREA ────────────────── -->
     <main class="flex-1 w-full max-w-lg mx-auto px-5 pt-24 pb-32 space-y-6">
         
-        <!-- Tab Content Wrapper -->
-        <div id="dashboard-tab-container">
-            
-            <!-- Welcome Banner (Premium Redesign) -->
-            <div class="slide-up delay-1 welcome-banner p-8 px-10 shadow-premium">
-                <p class="welcome-title">Welcome back</p>
-                <h1 id="user-display-phone" class="welcome-phone">+91 {{ request.session.user_phone }}</h1>
-                <p class="welcome-subtitle">Your hyperlocal service hub is ready.</p>
-            </div>
+            <!-- ── TAB CONTENT AREA ── -->
 
-            <!-- Map Preview Card -->
-            <div class="slide-up delay-2" onclick="location.href='/map'">
-                <p class="text-[11px] font-black uppercase tracking-widest text-gray-500 mb-2 px-1">Find Nearby Workers</p>
-                <div class="map-preview-card shadow-lg border-white/5 bg-gradient-to-br from-blue-900/40 to-slate-900/60 relative flex items-center justify-center">
-                    <!-- Clean Map Overlay -->
-                    <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
-                    <div class="relative flex items-center gap-4 px-6 w-full">
-                        <div class="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-[0_0_20px_rgba(37,99,235,0.4)]">
-                            <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                        </div>
-                        <div>
-                            <p class="text-base font-black text-white">Full Screen Map</p>
-                            <p class="text-[11px] font-bold text-blue-400/80">Tap to see workers near you</p>
+            <!-- HOME / JOBS TAB (Default Active) -->
+            <div id="tab-jobs" class="tab-pane active space-y-6">
+
+                <!-- Welcome Banner (Premium Redesign) -->
+                <div class="slide-up delay-1 welcome-banner p-8 px-10 shadow-premium">
+                    <p class="welcome-title">Welcome back</p>
+                    <h1 id="user-display-phone" class="welcome-phone">+91 {{ request.session.user_phone }}</h1>
+                    <p class="welcome-subtitle">Your hyperlocal service hub is ready.</p>
+                </div>
+
+                <!-- Map Preview Card -->
+                <div class="slide-up delay-2" onclick="location.href='/map'">
+                    <p class="text-[11px] font-black uppercase tracking-widest text-gray-500 mb-2 px-1">Find Nearby Workers</p>
+                    <div class="map-preview-card shadow-lg border-white/5 bg-gradient-to-br from-blue-900/40 to-slate-900/60 relative flex items-center justify-center">
+                        <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
+                        <div class="relative flex items-center gap-4 px-6 w-full">
+                            <div class="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-[0_0_20px_rgba(37,99,235,0.4)]">
+                                <svg class="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                            </div>
+                            <div>
+                                <p class="text-base font-black text-white">Full Screen Map</p>
+                                <p class="text-[11px] font-bold text-blue-400/80">Tap to see workers near you</p>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-            </div>
 
-
-            <!-- Dashboard Quick Stats (NEW GRID) -->
-            <div class="grid grid-cols-2 gap-4 slide-up delay-3">
-                <button onclick="switchTab('jobs')" class="stat-card p-5 text-left border-white/5 bg-white/5 hover:bg-white/[0.08] transition-all aspect-[4/3] flex flex-col justify-between">
-                    <div class="stat-icon-ring bg-blue-500/10 border border-blue-500/20 w-10 h-10">
-                        <svg class="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-                    </div>
-                    <div>
-                        <p class="text-3xl font-black text-white leading-none" id="stat-active">–</p>
-                        <p class="text-[10px] font-black uppercase tracking-widest text-gray-500 mt-2">Active Jobs</p>
-                    </div>
-                </button>
-
-                <button onclick="switchTab('chat')" class="stat-card p-5 text-left border-white/5 bg-white/5 hover:bg-white/[0.08] transition-all aspect-[4/3] flex flex-col justify-between">
-                    <div class="stat-icon-ring bg-emerald-500/10 border border-emerald-500/20 w-10 h-10">
-                        <svg class="w-5 h-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
-                    </div>
-                    <div>
-                        <p class="text-3xl font-black text-white leading-none" id="stat-messages">–</p>
-                        <p class="text-[10px] font-black uppercase tracking-widest text-gray-500 mt-2">Messages</p>
-                    </div>
-                </button>
-
-                <button onclick="switchTab('orders')" class="stat-card p-5 text-left border-white/5 bg-white/5 hover:bg-white/[0.08] transition-all col-span-2 flex items-center justify-between">
-                    <div class="flex items-center gap-4">
-                        <div class="stat-icon-ring bg-amber-500/10 border border-amber-500/20 w-12 h-12">
-                            <svg class="w-6 h-6 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                <!-- Dashboard Quick Stats -->
+                <div class="grid grid-cols-2 gap-4 slide-up delay-3">
+                    <button onclick="switchTab('jobs')" class="stat-card p-5 text-left border-white/5 bg-white/5 hover:bg-white/[0.08] transition-all aspect-[4/3] flex flex-col justify-between">
+                        <div class="stat-icon-ring bg-blue-500/10 border border-blue-500/20 w-10 h-10">
+                            <svg class="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
                         </div>
                         <div>
-                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-500">Total Orders</p>
-                            <p class="text-2xl font-black text-white" id="stat-orders">–</p>
+                            <p class="text-3xl font-black text-white leading-none" id="stat-active">–</p>
+                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-500 mt-2">Active Jobs</p>
                         </div>
-                    </div>
-                    <svg class="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
-                </button>
-            </div>
+                    </button>
 
-            <!-- ── TAB CONTENT AREA ── -->
+                    <button onclick="switchTab('chat')" class="stat-card p-5 text-left border-white/5 bg-white/5 hover:bg-white/[0.08] transition-all aspect-[4/3] flex flex-col justify-between">
+                        <div class="stat-icon-ring bg-emerald-500/10 border border-emerald-500/20 w-10 h-10">
+                            <svg class="w-5 h-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+                        </div>
+                        <div>
+                            <p class="text-3xl font-black text-white leading-none" id="stat-messages">–</p>
+                            <p class="text-[10px] font-black uppercase tracking-widest text-gray-500 mt-2">Messages</p>
+                        </div>
+                    </button>
 
-            <!-- JOBS TAB (Default Active) -->
-            <div id="tab-jobs" class="tab-pane active slide-up delay-3 space-y-4">
+                    <button onclick="switchTab('orders')" class="stat-card p-5 text-left border-white/5 bg-white/5 hover:bg-white/[0.08] transition-all col-span-2 flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <div class="stat-icon-ring bg-amber-500/10 border border-amber-500/20 w-12 h-12">
+                                <svg class="w-6 h-6 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/></svg>
+                            </div>
+                            <div>
+                                <p class="text-[10px] font-black uppercase tracking-widest text-gray-500">Total Orders</p>
+                                <p class="text-2xl font-black text-white" id="stat-orders">–</p>
+                            </div>
+                        </div>
+                        <svg class="w-5 h-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+                    </button>
+                </div>
 
-                <!-- Active Jobs -->
+                <!-- Active Jobs section -->
                 <div class="section-card">
                     <!-- Header for inner screen -->
                 <div class="flex items-center gap-4 px-5 py-3 border-b border-white/5 mb-4">
@@ -464,7 +473,6 @@
                             <p class="text-xs text-gray-300 text-center py-2">No completed jobs yet</p>
                         </div>
                     </div>
-                </div>
             </div>
 
             <div id="tab-orders" class="tab-pane slide-up delay-3 space-y-3">
@@ -552,9 +560,7 @@
                 </div>
             </div>
         </div>
-    </div>
-
-    </div>
+    </main>
     <!-- ── REFINED BOTTOM NAV ── -->
     <nav class="bottom-nav fixed bottom-0 left-0 right-0 z-[100] bg-[#111827]/96 backdrop-blur-xl border-t border-white/5 shadow-[0_-10px_40px_rgba(0,0,0,0.4)] h-[72px]">
         <div class="max-w-lg mx-auto flex items-center justify-around h-full px-2">
@@ -640,7 +646,7 @@
 </div>
 
     <!-- Chat Messages -->
-    <div id="chat-messages" class="flex-1 overflow-y-auto w-full max-w-lg mx-auto no-scrollbar px-5 py-4 space-y-4" style="background:radial-gradient(circle at top right, rgba(99,102,241,0.03), transparent);">
+    <div id="chat-messages" class="flex-1 overflow-y-auto w-full max-w-lg mx-auto px-5 py-4 space-y-4" style="background:radial-gradient(circle at top right, rgba(99,102,241,0.03), transparent); -webkit-overflow-scrolling: touch;">
 
         <!-- Worker Message -->
         <div class="flex items-end gap-2">
@@ -742,6 +748,8 @@
                 nav.classList.remove('active');
             }
         });
+        // Always scroll to top when switching tabs
+        window.scrollTo({ top: 0, behavior: 'instant' });
         tabs.forEach(t => {
             const nav   = document.getElementById(`nav-${t}`);
             if (!nav) return;
