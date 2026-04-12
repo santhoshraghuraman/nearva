@@ -34,6 +34,12 @@
 
 {% block head %}
 <style>
+    body {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+    }
+
     .hero-bg {
         background-image: url("{{ url_for('static', path='images/hero_bg.jpg') }}");
         background-size: cover;
@@ -62,7 +68,12 @@
     .hero-dark-overlay {
         position: absolute;
         inset: 0;
-        background: rgba(0, 0, 0, 0.45);
+        background: linear-gradient(
+            to bottom,
+            rgba(0, 0, 0, 0.50) 0%,
+            rgba(0, 0, 0, 0.65) 60%,
+            rgba(0, 0, 0, 0.70) 100%
+        );
         z-index: 2;
         pointer-events: none;
     }
@@ -76,6 +87,560 @@
         z-index: 3;
         pointer-events: none;
     }
+
+    /* =========================================================
+       HERO — Premium hierarchy, depth & polish
+       ========================================================= */
+
+    /* H1: maximum visual weight — dominant ── */
+    .hero-title {
+        font-size: clamp(26px, 5.8vw, 68px); /* slightly smaller for glyph balance */
+        line-height: 1.25;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+        word-break: break-word; /* handle long Tamil words */
+    }
+
+    /* Eyebrow: single-line label, clean and centred ── */
+    .hero-eyebrow {
+        font-size: clamp(10px, 2.3vw, 12px); /* more precise label scaling */
+        letter-spacing: 1.4px;
+        font-weight: 600;
+        text-transform: uppercase;
+        text-align: center;
+        color: #3b82f6;         /* vibrant primary blue */
+        line-height: 1.4;
+        max-width: 340px;
+        margin-left: auto;
+        margin-right: auto;
+        margin-top: 6px;
+        margin-bottom: 6px;
+        text-shadow: 0 2px 6px rgba(0,0,0,0.35);
+        opacity: 1;             /* full colour, no fade — it's a brand label */
+        will-change: transform, opacity;
+    }
+
+    .hero-icon {
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+        color: rgba(255, 255, 255, 0.9);
+        transition: opacity 0.2s ease;
+    }
+
+    .hero-icon:active {
+        opacity: 1;
+    }
+
+    /* Very small phones: allow wrap, tighten spacing */
+    @media (max-width: 400px) {
+        .hero-eyebrow {
+            font-size: 10px;
+            letter-spacing: 1.2px;
+            white-space: normal;
+            max-width: 240px;
+        }
+    }
+
+    /* Description: secondary weight, readable, contained ── */
+    .hero-description {
+        font-size: clamp(13px, 3.2vw, 16px);
+        line-height: 1.6; /* improved readability for glyph-heavy text */
+        opacity: 0.85;
+        font-weight: 400;
+        max-width: 280px;
+        margin-left: auto;
+        margin-right: auto;
+        margin-top: 4px;
+        margin-bottom: 6px;
+        word-break: break-word;
+        will-change: transform, opacity;
+    }
+
+    @media (min-width: 640px) {
+        .hero-description { max-width: 520px; }
+    }
+
+    /* ── Hero Trust Badge Row ── */
+    .hero-trust-badge-row {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .hero-trust-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(255, 255, 255, 0.18);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 9999px;
+        padding: 5px 11px; /* tighter padding for Tamil length */
+        font-size: 10px;    /* smaller base for better badge fitting */
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.95);
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        transition: background 0.2s ease, border-color 0.2s ease, transform 0.18s ease;
+    }
+
+    .hero-trust-badge:hover {
+        background: rgba(255, 255, 255, 0.21);
+        border-color: rgba(255, 255, 255, 0.38);
+        transform: translateY(-1px);
+    }
+
+    @media (min-width: 768px) {
+        .hero-trust-badge {
+            font-size: 12px;
+            padding: 6px 14px;
+            gap: 6px;
+        }
+    }
+
+    /* ── Availability Pill — glass + breathing pulse ── */
+    .availability-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        background: rgba(255, 255, 255, 0.18);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        border-radius: 9999px;
+        padding: 6px 14px;
+        font-size: 11px; /* tuned down for Tamil flow */
+        font-weight: 700;
+        color: #ffffff;
+        letter-spacing: 0.01em;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+        animation: pill-pulse 2.4s ease-in-out infinite;
+    }
+
+    @keyframes pill-pulse {
+        0%, 100% { opacity: 0.88; }
+        50%       { opacity: 1;    }
+    }
+
+    .availability-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #22c55e;
+        box-shadow: 0 0 8px rgba(34, 197, 94, 0.7);
+        animation: live-pulse 2s ease-in-out infinite;
+        flex-shrink: 0;
+    }
+
+    @keyframes live-pulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7); }
+        50%       { box-shadow: 0 0 0 5px rgba(74, 222, 128, 0); }
+    }
+
+    /* ── Micro CTA text ── */
+    .micro-cta-text {
+        font-size: 11px;
+        opacity: 0.60;
+        color: rgba(255, 255, 255, 0.85);
+        font-weight: 500;
+        letter-spacing: 0.05em;
+        text-align: center;
+        margin-top: 6px;
+    }
+
+    /* ── Primary CTA — gradient glow + hover lift ── */
+    .hero-btn-primary {
+        font-size: 14px; /* fixed size for word length control */
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        padding: 13px 26px;
+        height: auto;
+        min-height: 50px;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        box-shadow: 0 8px 24px rgba(37, 99, 235, 0.38);
+        transition: all 0.2s ease;
+    }
+
+    .hero-btn-primary:hover {
+        box-shadow: 0 14px 40px rgba(37, 99, 235, 0.50);
+        transform: translateY(-2px);
+        background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    }
+
+    .hero-btn-primary:active {
+        transform: scale(0.97) translateY(0);
+    }
+
+    /* ── Secondary CTA — soft glass + hover lift ── */
+    .hero-btn-secondary {
+        font-size: 13px; /* visual balance with primary */
+        font-weight: 700;
+        padding: 12px 22px;
+        height: auto;
+        min-height: 48px;
+        background: rgba(255, 255, 255, 0.96);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
+        transition: box-shadow 0.22s ease, transform 0.18s ease, background 0.2s ease;
+        color: #1e293b;
+    }
+
+    .hero-btn-secondary:hover {
+        background: rgba(255, 255, 255, 1);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+        transform: translateY(-2px);
+    }
+
+    .hero-btn-secondary:active {
+        transform: scale(0.97) translateY(0);
+    }
+
+    /* ── Mobile overrides ≤480px ── */
+    @media (max-width: 480px) {
+        .hero-title {
+            font-size: 30px;
+            letter-spacing: -0.3px;
+        }
+
+        .hero-description {
+            font-size: 13px;
+            max-width: 260px;
+        }
+
+        .hero-trust-badge {
+            font-size: 10px;
+            padding: 5px 9px;
+        }
+
+        .availability-pill {
+            font-size: 11px;
+            padding: 5px 11px;
+        }
+
+        .hero-btn-primary,
+        .hero-btn-secondary {
+            min-height: 46px;
+            padding: 12px 20px;
+            font-size: 13px;
+        }
+    }
+
+    /* ── Language-specific tuning — Tamil Glyph balance ── */
+    html[lang="ta"] .hero-title {
+        font-size: clamp(26px, 5.2vw, 40px);
+        line-height: 1.35;
+    }
+
+    html[lang="ta"] .hero-trust-badge {
+        font-size: 10px;
+    }
+
+    html[lang="ta"] .availability-pill {
+        font-size: 10px;
+    }
+
+    html[lang="ta"] .hero-btn-primary {
+        font-size: 13px;
+    }
+
+    html[lang="ta"] .hero-btn-secondary {
+        font-size: 12px;
+    }
+
+    /* ── Category Skeletons ── */
+    .cat-skeleton {
+        @apply aspect-square bg-white rounded-[32px] border border-gray-50 flex flex-col items-center justify-center p-6 gap-4;
+    }
+
+    .shimmer-box {
+        @apply bg-slate-100 rounded-2xl relative overflow-hidden;
+        animation: shimmer 1.5s infinite linear;
+        background: linear-gradient(90deg, #f1f5f9 25%, #f8fafc 50%, #f1f5f9 75%);
+        background-size: 200% 100%;
+    }
+
+    @keyframes shimmer {
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+
+    .cat-section-container {
+        content-visibility: auto;
+        contain-intrinsic-size: 1px 600px;
+    }
+
+    /* ── NEW: Quick Category Scroll ── */
+    .quick-cat-section {
+        background: #ffffff;
+        border-bottom: 1px solid #f1f5f9;
+        padding: 20px 0 4px;
+    }
+
+    .quick-cat-scroll {
+        display: flex;
+        gap: 10px;
+        overflow-x: auto;
+        padding: 4px 20px 16px;
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .quick-cat-scroll::-webkit-scrollbar {
+        display: none;
+    }
+
+    .quick-cat-chip {
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        min-width: 72px;
+        padding: 10px 8px;
+        background: #f8fafc;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 16px;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        text-decoration: none;
+        flex-shrink: 0;
+    }
+
+    .quick-cat-chip:hover,
+    .quick-cat-chip:focus {
+        background: #eff6ff;
+        border-color: #bfdbfe;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.12);
+    }
+
+    .quick-cat-chip:active {
+        transform: scale(0.95);
+    }
+
+    .quick-cat-icon {
+        font-size: 22px;
+        line-height: 1;
+    }
+
+    .quick-cat-label {
+        font-size: 10px;
+        font-weight: 700;
+        color: #475569;
+        text-align: center;
+        letter-spacing: 0.01em;
+        line-height: 1.2;
+        white-space: nowrap;
+    }
+
+    @media (min-width: 768px) {
+        .quick-cat-section {
+            padding: 24px 0 8px;
+        }
+
+        .quick-cat-scroll {
+            justify-content: center;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            padding: 4px 32px 20px;
+        }
+
+        .quick-cat-chip {
+            min-width: 80px;
+            padding: 12px 10px;
+        }
+
+        .quick-cat-icon {
+            font-size: 26px;
+        }
+
+        .quick-cat-label {
+            font-size: 11px;
+        }
+    }
+
+    /* ── NEW: How It Works Section ── */
+    .how-it-works-section {
+        background: #f8fafc;
+        padding: 52px 20px 56px;
+    }
+
+    .how-it-works-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 24px;
+        max-width: 860px;
+        margin: 0 auto;
+    }
+
+    @media (min-width: 640px) {
+        .how-it-works-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+    }
+
+    .hiw-step-card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 20px;
+        padding: 28px 20px 24px;
+        position: relative;
+        transition: box-shadow 0.25s ease, transform 0.25s ease;
+    }
+
+    .hiw-step-card:hover {
+        box-shadow: 0 12px 28px -8px rgba(37, 99, 235, 0.12);
+        transform: translateY(-3px);
+    }
+
+    .hiw-step-number {
+        position: absolute;
+        top: -13px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 26px;
+        height: 26px;
+        background: #2563eb;
+        color: #ffffff;
+        font-size: 11px;
+        font-weight: 900;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        letter-spacing: 0;
+        box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+    }
+
+    .hiw-icon-wrap {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 26px;
+        margin-bottom: 14px;
+    }
+
+    .hiw-title {
+        font-size: 15px;
+        font-weight: 800;
+        color: #0f172a;
+        margin-bottom: 6px;
+        letter-spacing: -0.01em;
+    }
+
+    .hiw-desc {
+        font-size: 13px;
+        color: #64748b;
+        line-height: 1.55;
+        font-weight: 500;
+    }
+
+    /* ── NEW: Trust & Safety Strip ── */
+    .trust-strip-section {
+        background: #ffffff;
+        border-top: 1px solid #f1f5f9;
+        border-bottom: 1px solid #f1f5f9;
+        padding: 28px 20px;
+    }
+
+    .trust-strip-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        max-width: 720px;
+        margin: 0 auto;
+    }
+
+    @media (min-width: 640px) {
+        .trust-strip-grid {
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+    }
+
+    .trust-strip-badge {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: #f8fafc;
+        border: 1.5px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 10px 12px;
+        transition: border-color 0.2s ease;
+    }
+
+    .trust-strip-badge:hover {
+        border-color: #bfdbfe;
+        background: #eff6ff;
+    }
+
+    .trust-strip-icon {
+        font-size: 18px;
+        flex-shrink: 0;
+    }
+
+    .trust-strip-label {
+        font-size: 11px;
+        font-weight: 700;
+        color: #334155;
+        letter-spacing: 0.01em;
+        line-height: 1.3;
+    }
+
+    /* ── Fade-in on scroll (lightweight, no library) ── */
+    .fade-in-scroll {
+        opacity: 0;
+        transform: translateY(16px);
+        transition: opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1), transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .fade-in-scroll.visible {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    /* ── Section Heading shared ── */
+    .section-heading {
+        font-size: 20px;
+        font-weight: 900;
+        color: #0f172a;
+        text-align: center;
+        letter-spacing: -0.02em;
+        margin-bottom: 20px;
+    }
+
+    @media (min-width: 768px) {
+        .section-heading {
+            font-size: 26px;
+        }
+    }
+
+    /* Skeleton for availability count */
+    .avail-skeleton {
+        display: inline-block;
+        width: 24px;
+        height: 14px;
+        border-radius: 4px;
+        background: linear-gradient(90deg, rgba(255,255,255,0.2) 25%, rgba(255,255,255,0.35) 50%, rgba(255,255,255,0.2) 75%);
+        background-size: 200% 100%;
+        animation: shimmer 1.5s infinite linear;
+        vertical-align: middle;
+    }
 </style>
 {% endblock %}
 
@@ -87,6 +652,8 @@
         class="hero-video" id="hero-video-bg">
         <source src="{{ url_for('static', path='images/hero_backgroundvideo.mp4') }}" type="video/mp4">
     </video>
+    <link rel="preload" as="script" href="{{ url_for('static', path='js/categories.js') }}?v=2">
+    <link rel="preload" as="video" href="{{ url_for('static', path='images/hero_backgroundvideo.mp4') }}">
 
     <!-- Dark Overlay for contrast -->
     <div class="hero-dark-overlay"></div>
@@ -95,16 +662,16 @@
     <div class="absolute inset-0 hero-overlay"></div>
 
     <div
-        class="relative z-10 container max-w-[1100px] mx-auto px-5 pt-20 pb-20 md:py-20 text-center flex flex-col items-center">
+        class="relative z-10 container max-w-[1100px] mx-auto px-5 pt-16 pb-8 md:py-20 text-center flex flex-col items-center" style="gap: 0;">
 
-        <p class="fade-in-up text-[11px] md:text-base text-[#3b82f6] font-extrabold uppercase tracking-[0.25em] mb-6 mx-auto leading-relaxed text-center" 
-           data-en="Trusted workers in your area <br> within seconds." 
-           data-ta="உங்கள் பகுதியில் நம்பகமான ஊழியர்கள் <br> சில நொடிகளில்.">
-            Trusted workers in your area <br> within seconds.
+        <p class="fade-in-up hero-eyebrow"
+           data-en="TRUSTED WORKERS IN YOUR AREA <br/> WITHIN SECONDS"
+           data-ta="உங்கள் பகுதியில் நம்பகமான ஊழியர்கள் <br/> சில நொடிகளில்">
+            TRUSTED WORKERS IN YOUR AREA <br/> WITHIN SECONDS
         </p>
 
         <h1
-            class="fade-in-up animate-delay-1 text-[42px] sm:text-6xl md:text-8xl font-black text-white tracking-tight mb-8 leading-[1.05] hero-content-shadow">
+            class="fade-in-up animate-delay-1 hero-title text-white hero-content-shadow mt-2 mb-4">
             <span data-en="Help is" data-ta="உதவி">Help is</span>
             <span class="text-[#3b82f6]">
                 <span data-en="closer" data-ta="அருகிலேயே">closer</span>
@@ -113,35 +680,75 @@
             <span data-en="than you think." data-ta="இருக்கிறது.">than you think.</span>
         </h1>
 
+        <!-- ── NEW: Hero Trust Badge Row ── -->
+        <div class="fade-in-up animate-delay-1 hero-trust-badge-row mb-4" aria-label="Trust indicators">
+            <span class="hero-trust-badge">
+                <svg class="hero-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                </svg>
+                <span data-en="500+ Verified Workers" data-ta="500+ சரிபார்க்கப்பட்ட பணியாளர்கள்">500+ Verified Workers</span>
+            </span>
+            <span class="hero-trust-badge">
+                <svg class="hero-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0111 2v5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd" />
+                    <path fill-rule="evenodd" d="M8.7 18.954a1 1 0 01.3-1.954V12h7a1 1 0 01.82 1.573l-7 10a1 1 0 01-1.12.38z" clip-rule="evenodd" />
+                </svg>
+                <span data-en="Instant Response" data-ta="உடனடி பதில்">Instant Response</span>
+            </span>
+            <span class="hero-trust-badge">
+                <svg class="hero-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                    <path fill-rule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clip-rule="evenodd" />
+                </svg>
+                <span data-en="100% Trusted Profiles" data-ta="100% நம்பகமான சுயவிவரங்கள்">100% Trusted Profiles</span>
+            </span>
+        </div>
+
         <p
-            class="fade-in-up animate-delay-2 hero-sub text-[16px] md:text-xl text-gray-100/90 mb-12 max-w-[320px] sm:max-w-2xl mx-auto leading-relaxed font-medium hero-content-shadow">
+            class="fade-in-up animate-delay-2 hero-description hero-sub text-gray-100/90 mb-4 max-w-[300px] sm:max-w-2xl mx-auto font-medium hero-content-shadow">
             <span data-en="Find trusted local workers instantly. No middlemen, just direct connection."
-                data-ta="உடனடியாக பணியாளர்களைக் கண்டறியவும். <br class='hidden md:block' /> நேரடித் தொடர்பு, இடைத்தரகர்கள் இல்லை.">Find
-                trusted local workers instantly.<br class="hidden md:block" /> No middlemen, just direct
-                connection.</span>
+                data-ta="உடனடியாக பணியாளர்களைக் கண்டறியவும். நேரடித் தொடர்பு, இடைத்தரகர்கள் இல்லை.">Find
+                trusted local workers instantly. No middlemen, just direct connection.</span>
         </p>
 
+        <!-- ── NEW: Dynamic Availability Indicator (above buttons) ── -->
+        <div class="fade-in-up animate-delay-2 mb-3" id="availability-indicator-wrap">
+            <div class="availability-pill">
+                <span class="availability-dot" aria-hidden="true"></span>
+                <span id="availability-text">
+                    <span id="worker-count-display"><span class="avail-skeleton" aria-hidden="true"></span></span>
+                    <span data-en="workers available near you" data-ta="பணியாளர்கள் உங்கள் அருகில்">workers available near you</span>
+                </span>
+            </div>
+        </div>
+
         <div
-            class="fade-in-up animate-delay-2 flex flex-col sm:flex-row gap-4 justify-center w-full max-w-[320px] sm:max-w-2xl mx-auto">
+            class="fade-in-up animate-delay-2 flex flex-col sm:flex-row gap-3 justify-center w-full max-w-[300px] sm:max-w-2xl mx-auto mt-[14px]">
             <a href="/map"
-                class="gpu-accelerated group inline-flex items-center justify-center px-8 py-5 h-[62px] text-base font-bold rounded-2xl text-white bg-[#2563eb] hover:bg-[#1d4ed8] shadow-xl shadow-blue-600/30 active:scale-95 transition-all duration-300 w-full sm:w-auto whitespace-nowrap">
+                class="gpu-accelerated hero-btn-primary group inline-flex items-center justify-center rounded-2xl text-white bg-[#2563eb] hover:bg-[#1d4ed8] shadow-xl shadow-blue-600/30 active:scale-95 transition-all duration-300 w-full sm:w-auto whitespace-nowrap font-bold">
                 <span data-en="Find Nearby Workers" data-ta="பணியாளர்களைத் தேடுங்கள்">Find Nearby Workers</span>
                 <svg xmlns="http://www.w3.org/2000/svg"
-                    class="h-5 w-5 ml-3 group-hover:translate-x-1 transition-transform"
+                    class="h-5 w-5 ml-2 group-hover:translate-x-1 transition-transform"
                     fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                 </svg>
             </a>
 
             <button onclick="detectLocation(event)"
-                class="gpu-accelerated group flex items-center justify-center gap-2 px-8 py-5 h-[62px] text-base font-bold rounded-2xl text-gray-800 bg-white shadow-xl hover:bg-gray-50 active:scale-95 transition-all duration-300 w-full sm:w-auto whitespace-nowrap">
-                <span class="text-xl">📍</span>
+                class="gpu-accelerated hero-btn-secondary group flex items-center justify-center gap-2 rounded-2xl text-gray-800 bg-white shadow-xl hover:bg-gray-50 active:scale-95 transition-all duration-300 w-full sm:w-auto whitespace-nowrap font-bold">
+                <span class="text-lg">📍</span>
                 <span data-en="Use My Location" data-ta="இருப்பிடம்">Use My Location</span>
             </button>
         </div>
 
+        <!-- ── NEW: Micro CTA Text ── -->
+        <p class="micro-cta-text fade-in-up animate-delay-2"
+           data-en="Takes less than 5 seconds" 
+           data-ta="5 நொடிகளுக்கும் குறைவாக">
+            Takes less than 5 seconds
+        </p>
+
         <p
-            class="fade-in-up animate-delay-2 mt-16 text-[10px] md:text-sm text-gray-400 font-bold tracking-[0.4em] uppercase opacity-80">
+            class="fade-in-up animate-delay-2 mt-4 text-[10px] md:text-sm text-gray-400 font-bold tracking-[0.4em] uppercase opacity-80">
             <span data-en="Live in your neighborhood" data-ta="உங்கள் அருகாமையில்">Live in your
                 neighborhood</span>
         </p>
@@ -149,7 +756,14 @@
     </div>
 </div>
 
-<!-- Trust Badges Section -->
+<!-- ── NEW: Quick Category Scroll ── -->
+<nav class="quick-cat-section" id="quick-categories" aria-label="Quick service categories">
+    <div class="quick-cat-scroll" id="quick-cat-scroll-inner" role="list">
+        <!-- Injected by JS from NEARVA_CATEGORIES -->
+    </div>
+</nav>
+
+<!-- Trust Badges Section (existing – preserved exactly) -->
 <div class="bg-white border-b border-gray-100 py-6">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
@@ -193,15 +807,113 @@
     </div>
 </div>
 
-<!-- Categories Section -->
+<!-- ── NEW: How It Works Section ── -->
+<section class="how-it-works-section fade-in-scroll" id="how-it-works" aria-labelledby="hiw-heading">
+    <h2 class="section-heading" id="hiw-heading"
+        data-en="How Nearva Works" data-ta="Nearva எப்படி வேலை செய்கிறது">
+        How Nearva Works
+    </h2>
+    <div class="how-it-works-grid">
+
+        <!-- Step 1 -->
+        <div class="hiw-step-card fade-in-scroll">
+            <div class="hiw-step-number" aria-hidden="true">1</div>
+            <div class="hiw-icon-wrap" style="background: #eff6ff;">
+                <span aria-hidden="true">🔍</span>
+            </div>
+            <h3 class="hiw-title"
+                data-en="Choose a Service" data-ta="ஒரு சேவையைத் தேர்ந்தெடுங்கள்">
+                Choose a Service
+            </h3>
+            <p class="hiw-desc"
+               data-en="Browse 26+ categories and pick the service you need in your area."
+               data-ta="26+ வகைகளை உலாவி உங்கள் பகுதியில் தேவையான சேவையைத் தேர்ந்தெடுங்கள்.">
+                Browse 26+ categories and pick the service you need in your area.
+            </p>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="hiw-step-card fade-in-scroll" style="transition-delay: 0.1s;">
+            <div class="hiw-step-number" aria-hidden="true">2</div>
+            <div class="hiw-icon-wrap" style="background: #f0fdf4;">
+                <span aria-hidden="true">📍</span>
+            </div>
+            <h3 class="hiw-title"
+                data-en="Connect Nearby" data-ta="அருகிலுள்ளவரிடம் இணையுங்கள்">
+                Connect Nearby
+            </h3>
+            <p class="hiw-desc"
+               data-en="See verified workers on the live map and request directly — no middlemen."
+               data-ta="நேரலை வரைபடத்தில் சரிபார்க்கப்பட்ட பணியாளர்களைப் பாருங்கள் — நேரடியாக கோருங்கள்.">
+                See verified workers on the live map and request directly — no middlemen.
+            </p>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="hiw-step-card fade-in-scroll" style="transition-delay: 0.2s;">
+            <div class="hiw-step-number" aria-hidden="true">3</div>
+            <div class="hiw-icon-wrap" style="background: #fefce8;">
+                <span aria-hidden="true">✅</span>
+            </div>
+            <h3 class="hiw-title"
+                data-en="Get Job Done" data-ta="வேலையை முடியுங்கள்">
+                Get Job Done
+            </h3>
+            <p class="hiw-desc"
+               data-en="Worker arrives, completes the task. Rate & review to help the community."
+               data-ta="பணியாளர் வருகிறார், பணியை முடிக்கிறார். சமூகத்திற்கு உதவ மதிப்பிடுங்கள்.">
+                Worker arrives, completes the task. Rate &amp; review to help the community.
+            </p>
+        </div>
+
+    </div>
+</section>
+
+<!-- ── NEW: Trust & Safety Strip ── -->
+<section class="trust-strip-section fade-in-scroll" aria-label="Trust and safety features">
+    <p class="section-heading"
+       data-en="Safe, Trusted &amp; Reliable" data-ta="பாதுகாப்பான, நம்பகமான &amp; நம்பகமானது">
+        Safe, Trusted &amp; Reliable
+    </p>
+    <div class="trust-strip-grid">
+        <div class="trust-strip-badge">
+            <span class="trust-strip-icon" aria-hidden="true">🪪</span>
+            <span class="trust-strip-label" 
+                  data-en="ID Verified Workers" data-ta="அடையாள சரிபார்ப்பு">ID Verified Workers</span>
+        </div>
+        <div class="trust-strip-badge">
+            <span class="trust-strip-icon" aria-hidden="true">⭐</span>
+            <span class="trust-strip-label"
+                  data-en="Ratings &amp; Reviews" data-ta="மதிப்பீடுகள் &amp; மதிப்புரைகள்">Ratings &amp; Reviews</span>
+        </div>
+        <div class="trust-strip-badge">
+            <span class="trust-strip-icon" aria-hidden="true">📞</span>
+            <span class="trust-strip-label"
+                  data-en="Direct Contact" data-ta="நேரடி தொடர்பு">Direct Contact</span>
+        </div>
+        <div class="trust-strip-badge">
+            <span class="trust-strip-icon" aria-hidden="true">🚫</span>
+            <span class="trust-strip-label"
+                  data-en="No Middleman" data-ta="இடைத்தரகர் இல்லை">No Middleman</span>
+        </div>
+    </div>
+</section>
+
+<!-- Categories Section (existing – preserved exactly) -->
 <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-32">
     <h3 class="text-2xl md:text-3xl font-extrabold text-gray-900 text-center mb-12 tracking-tight"
         data-en="Browse Categories" data-ta="வகைகளைத் தேடுங்கள்">
         Browse Categories
     </h3>
 
-    <div id="categories-grid" class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-        <!-- Categories will be injected here via JavaScript -->
+    <div id="categories-grid" class="cat-section-container grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+        <!-- 10 Skeletons: Shown instantly, cleared by JS -->
+        {% for _ in range(10) %}
+        <div class="cat-skeleton">
+            <div class="shimmer-box w-16 h-16"></div>
+            <div class="shimmer-box w-20 h-4"></div>
+        </div>
+        {% endfor %}
     </div>
 </div>
 </main>
@@ -211,7 +923,7 @@
 
 {% block scripts %}
 <script>
-    // Hero Video Loading Polish
+    // ── Existing: Hero Video Loading Polish ──────────────────────────────
     const heroVideo = document.getElementById('hero-video-bg');
     if (heroVideo) {
         heroVideo.addEventListener('play', () => heroVideo.classList.add('loaded'));
@@ -221,7 +933,7 @@
         }, { once: true });
     }
 
-    // Navbar Scroll Reveal (Specific to Index)
+    // ── Existing: Navbar Scroll Reveal ───────────────────────────────────
     const mainNav = document.getElementById('main-nav');
     window.addEventListener('scroll', () => {
         if (window.scrollY > 50) {
@@ -233,19 +945,18 @@
         }
     });
 
-    // Render dynamic categories
+    // ── Existing: Render dynamic categories (full grid) ──────────────────
     const categoriesGrid = document.getElementById('categories-grid');
     if (categoriesGrid && typeof NEARVA_CATEGORIES !== 'undefined') {
+        categoriesGrid.innerHTML = ''; // Clear skeletons
         NEARVA_CATEGORIES.forEach(cat => {
             const card = document.createElement('a');
             card.href = `/map?category=${encodeURIComponent(cat.name)}`;
             card.className = 'relative gpu-accelerated group flex flex-col items-center justify-center gap-y-4 aspect-square bg-white rounded-[32px] shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-gray-50 active:scale-95 transition-all duration-300 hover:shadow-[0_20px_40px_rgba(0,0,0,0.06)] hover:-translate-y-1';
 
-            // Generate color-specific background classes (Tailwind)
             const bgClass = `bg-${cat.color}-50/50`;
             const borderClass = `border-${cat.color}-100/50`;
 
-            // Generate Verified Badge
             let badgeHtml = '';
             const verifiedIds = ['cook', 'driver', 'baby-sitting', 'elder-care'];
             if (verifiedIds.includes(cat.id)) {
@@ -265,10 +976,94 @@
                     <span data-en="${cat.name}" data-ta="${cat.tamil}">${cat.name}</span>
                 </h4>
             `;
+            // Performance: decoding="async" is handled by browser for inline text/SVG, 
+            // but we ensure the card is efficiently appended.
             categoriesGrid.appendChild(card);
         });
     }
 
+    // ── NEW: Render Quick Category Scroll (top 8 priority categories) ────
+    const QUICK_CAT_IDS = ['electrician', 'plumber', 'ac-technician', 'carpenter', 'house-cleaning', 'two-wheeler-mechanic', 'mobile-repair', 'cook'];
+    const quickCatInner = document.getElementById('quick-cat-scroll-inner');
+    if (quickCatInner && typeof NEARVA_CATEGORIES !== 'undefined') {
+        QUICK_CAT_IDS.forEach(id => {
+            const cat = NEARVA_CATEGORIES.find(c => c.id === id);
+            if (!cat) return;
+            const chip = document.createElement('a');
+            chip.href = `/map?category=${encodeURIComponent(cat.name)}`;
+            chip.className = 'quick-cat-chip';
+            chip.setAttribute('role', 'listitem');
+            chip.setAttribute('aria-label', cat.name);
+            chip.innerHTML = `
+                <span class="quick-cat-icon" aria-hidden="true">${cat.icon}</span>
+                <span class="quick-cat-label" data-en="${cat.name}" data-ta="${cat.tamil}">${cat.name}</span>
+            `;
+            quickCatInner.appendChild(chip);
+        });
+    }
+
+    // ── NEW: Dynamic Worker Count ─────────────────────────────────────────
+    (function fetchWorkerCount() {
+        const countEl = document.getElementById('worker-count-display');
+        if (!countEl) return;
+
+        const FALLBACK = 20;
+
+        // Proactive: Load global count immediately
+        loadCount(null, null);
+
+        // Try to get geolocation for a local count, non-blocking
+        function loadCount(lat, lng) {
+            let url = '/api/worker-count';
+            if (lat && lng) url += `?lat=${lat}&lng=${lng}`;
+
+            fetch(url, { signal: AbortSignal.timeout(4000) })
+                .then(r => r.json())
+                .then(data => {
+                    const count = (data && typeof data.count === 'number') ? data.count : FALLBACK;
+                    // Only update if it's the first load or a more specific local count
+                    if (!countEl.textContent || lat) {
+                        countEl.textContent = count;
+                    }
+                })
+                .catch(() => {
+                    if (!countEl.textContent) countEl.textContent = FALLBACK;
+                });
+        }
+
+        // Try geolocation (cached), update to local count if found
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                pos => loadCount(pos.coords.latitude, pos.coords.longitude),
+                null, // Fail silently, we already hit global count
+                { timeout: 3000, maximumAge: 300000 } 
+            );
+        }
+    })();
+
+    // ── NEW: Scroll-triggered Fade-in for new sections ────────────────────
+    (function initScrollFadeIn() {
+        const targets = document.querySelectorAll('.fade-in-scroll');
+        if (!targets.length) return;
+
+        if ('IntersectionObserver' in window) {
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('visible');
+                        observer.unobserve(entry.target); // one-shot
+                    }
+                });
+            }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+            targets.forEach(el => observer.observe(el));
+        } else {
+            // Fallback: show all immediately
+            targets.forEach(el => el.classList.add('visible'));
+        }
+    })();
+
+    // ── Existing: Location detection ─────────────────────────────────────
     function detectLocation(event) {
         const btn = event.currentTarget;
         const originalHtml = btn.innerHTML;
@@ -293,7 +1088,6 @@
                 (error) => {
                     btn.disabled = false;
                     btn.innerHTML = originalHtml;
-                    // Using a more modern alert or just a toast if available, but staying safe with alert for now
                     showToast("Unable to retrieve your location. Please ensure location services are enabled.", "error");
                 },
                 { enableHighAccuracy: true, timeout: 8000 }

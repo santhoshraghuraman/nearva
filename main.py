@@ -187,6 +187,46 @@ async def add_cache_control_header(request: Request, call_next):
 async def read_root(request: Request):
     return templates.TemplateResponse(request=request, name="index.html")
 
+@app.get("/api/worker-count")
+async def get_worker_count(lat: float = None, lng: float = None):
+    """
+    Lightweight endpoint: returns count of active verified workers.
+    Optionally filters by ~10km bounding box if lat/lng provided.
+    Designed to be non-blocking with a safe fallback.
+    """
+    FALLBACK_COUNT = 20
+    try:
+        # Use Supabase count header for efficiency (no row data fetched)
+        count_headers = {
+            **SUPABASE_HEADERS,
+            "Prefer": "count=exact"
+        }
+        query = "workers?verification_status=eq.VERIFIED&subscription_status=neq.EXPIRED&select=id"
+
+        if lat is not None and lng is not None:
+            lat_delta = 0.1
+            lng_delta = 0.1
+            query += f"&latitude=gte.{lat - lat_delta}&latitude=lte.{lat + lat_delta}"
+            query += f"&longitude=gte.{lng - lng_delta}&longitude=lte.{lng + lng_delta}"
+
+        url = f"{SUPABASE_URL}/rest/v1/{query}"
+        response = await http_client.get(url, headers=count_headers)
+
+        if response.status_code == 200:
+            # Supabase returns count in Content-Range header: e.g., "0-24/25"
+            content_range = response.headers.get("Content-Range", "")
+            if "/" in content_range:
+                total = int(content_range.split("/")[1])
+                return JSONResponse({"count": total})
+            # Fallback: count from response body
+            workers = response.json()
+            return JSONResponse({"count": len(workers)})
+
+        return JSONResponse({"count": FALLBACK_COUNT})
+    except Exception as e:
+        print(f"[worker-count] Non-critical error: {e}")
+        return JSONResponse({"count": FALLBACK_COUNT})
+
 @app.get("/api/workers")
 async def get_workers(category: str = "All", lat: float = None, lng: float = None):
     # Master Optimization: Fetch ONLY minimum required fields for map rendering
